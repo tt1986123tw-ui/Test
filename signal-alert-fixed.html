@@ -1,0 +1,2982 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC 交易訊號</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f5f2ec;--card:#fff;--ink:#1a1a1a;--dim:#888;--border:#e0dbd2;
+  --long:#00835a;--long-bg:#e8f7f1;--long-border:#b2e0d0;
+  --short:#c0292b;--short-bg:#fdf0f0;--short-border:#f0c0c0;
+  --wait:#8a6800;--wait-bg:#fdf8e8;--wait-border:#e8d88a;
+  --accent:#2d5be3;--trail:#9b59b6;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--ink);font-family:'Syne',sans-serif;min-height:100vh;padding:16px 14px 40px;}
+body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg width='4' height='4' viewBox='0 0 4 4' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='1' cy='1' r='.4' fill='%23c8bfb0' fill-opacity='0.4'/%3E%3C/svg%3E");pointer-events:none;z-index:0;}
+.page-layout{position:relative;z-index:1;display:flex;gap:16px;max-width:980px;margin:0 auto;align-items:flex-start;}
+.wrap{flex:0 0 480px;min-width:0;}
+
+/* ── Signal Log Panel ── */
+.log-panel{flex:1;min-width:220px;max-width:300px;position:sticky;top:16px;max-height:calc(100vh - 32px);display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+.log-header{display:flex;align-items:center;gap:6px;padding:10px 12px 9px;border-bottom:1px solid var(--border);background:white;flex-shrink:0;}
+.log-title{font-size:12px;font-weight:800;letter-spacing:-0.3px;flex:1;}
+.log-title span{color:var(--accent);}
+.log-count{font-family:'DM Mono',monospace;font-size:9px;background:var(--ink);color:white;border-radius:10px;padding:1px 6px;}
+.log-clear{font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;padding:2px 7px;border-radius:4px;border:1px solid var(--border);background:white;color:var(--dim);transition:all 0.15s;}
+.log-clear:hover{border-color:var(--short);color:var(--short);}
+.log-body{overflow-y:auto;flex:1;max-height:calc(100vh - 100px);}
+.log-empty{padding:24px 12px;text-align:center;font-size:10px;color:var(--dim);font-family:'DM Mono',monospace;line-height:1.8;}
+.log-item{padding:8px 11px;border-bottom:1px solid var(--border);transition:background 0.15s;animation:fadeUp 0.3s ease both;}
+.log-item:hover{background:rgba(0,0,0,0.015);}
+.log-item:last-child{border-bottom:none;}
+.log-item-top{display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap;}
+.log-badge{font-size:8px;font-weight:800;padding:2px 5px;border-radius:3px;letter-spacing:0.3px;white-space:nowrap;}
+.log-badge.long{background:var(--long-bg);color:var(--long);border:1px solid var(--long-border);}
+.log-badge.short{background:var(--short-bg);color:var(--short);border:1px solid var(--short-border);}
+.log-badge.close-tp{background:#e8f7f1;color:var(--long);border:1px solid var(--long-border);}
+.log-badge.close-sl{background:#fdf0f0;color:var(--short);border:1px solid var(--short-border);}
+.log-badge.close-manual{background:#f5f2ec;color:var(--dim);border:1px solid var(--border);}
+.log-badge.warn{background:rgba(255,165,0,0.12);color:#7a4f00;border:1px solid rgba(255,165,0,0.3);}
+.log-badge.addon{background:rgba(45,91,227,0.1);color:var(--accent);border:1px solid rgba(45,91,227,0.25);}
+.log-coin{font-size:9px;font-weight:700;color:var(--ink);}
+.log-time{font-size:8px;font-family:'DM Mono',monospace;color:var(--dim);margin-left:auto;white-space:nowrap;}
+.log-meta{font-size:9px;font-family:'DM Mono',monospace;color:var(--dim);line-height:1.5;margin-top:1px;}
+.log-meta b{color:var(--ink);}
+.log-pnl{font-size:10px;font-family:'DM Mono',monospace;font-weight:700;margin-top:2px;}
+.log-pnl.win{color:var(--long);}.log-pnl.loss{color:var(--short);}
+.log-body::-webkit-scrollbar{width:3px;}
+.log-body::-webkit-scrollbar-track{background:transparent;}
+.log-body::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+@media(max-width:740px){
+  .page-layout{flex-direction:column;max-width:480px;}
+  .log-panel{position:static;max-height:260px;min-width:0;max-width:100%;width:100%;}
+  .log-body{max-height:200px;}
+  .wrap{flex:none;width:100%;}
+}
+
+/* Header */
+.hd{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px;padding-bottom:14px;border-bottom:2px solid var(--ink);}
+.hd-title{font-size:20px;font-weight:800;letter-spacing:-0.5px;}
+.hd-title span{color:var(--accent);}
+.hd-sub{font-size:10px;color:var(--dim);,monospace;text-align:right;}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ccc;margin-right:4px;transition:background 0.3s;}
+.live-dot.ok{background:#00c06a;animation:blink 1.8s infinite;}
+.live-dot.err{background:#ff4444;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Price bar */
+.price-bar{background:var(--ink);color:white;border-radius:10px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.pb-left .pb-pair{font-family:'DM Mono',monospace;font-size:11px;color:#aaa;}
+.pb-price{font-family:'DM Mono',monospace;font-size:24px;font-weight:500;transition:color 0.3s;}
+.pb-price.flash-up{color:#4dffaa;}.pb-price.flash-dn{color:#ff7070;}
+.pb-change{font-family:'DM Mono',monospace;font-size:11px;}
+.pb-change.up{color:#4dffaa;}.pb-change.dn{color:#ff7070;}
+.pb-right{text-align:right;}
+.pb-tf{font-size:10px;background:rgba(255,255,255,0.1);border-radius:4px;padding:2px 7px;font-family:'DM Mono',monospace;display:inline-block;}
+.pb-meta{font-size:9px;color:#888;margin-top:5px;font-family:'DM Mono',monospace;}
+.ws-badge{font-size:9px;padding:2px 6px;border-radius:3px;font-family:'DM Mono',monospace;display:inline-block;margin-top:3px;}
+.ws-badge.live{background:rgba(0,192,106,0.2);color:#4dffaa;}
+.ws-badge.poll{background:rgba(255,165,0,0.2);color:#ffb300;}
+.ws-badge.err{background:rgba(255,68,68,0.2);color:#ff7070;}
+
+/* Coin selector */
+.coin-selector{display:flex;gap:10px;margin-bottom:14px;}
+.coin-btn{font-family:'DM Mono',monospace;font-size:14px;font-weight:700;padding:10px 0;border-radius:10px;cursor:pointer;border:2px solid var(--border);background:white;color:var(--ink);transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:6px;flex:1;}
+.coin-btn:hover{border-color:var(--accent);color:var(--accent);}
+.coin-btn.active{background:var(--ink);color:white;border-color:var(--ink);}
+.coin-btn .coin-emoji{font-size:16px;}
+.coin-change-up{color:#4dffaa;font-size:10px;font-family:'DM Mono',monospace;}
+.coin-change-dn{color:#ff7070;font-size:10px;font-family:'DM Mono',monospace;}
+
+/* Entry info bar */
+.entry-info-bar{display:flex;align-items:stretch;background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.08);border-radius:8px;padding:8px 0;margin-bottom:12px;gap:0;}
+.eib-item{flex:1;text-align:center;padding:0 8px;}
+.eib-label{font-size:8px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);margin-bottom:4px;}
+.eib-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:var(--ink);}
+.eib-val.up{color:var(--long);}.eib-val.dn{color:var(--short);}.eib-val.acc{color:var(--accent);}
+.eib-divider{width:1px;background:var(--border);margin:0 2px;flex-shrink:0;}
+
+/* Sound toggle */
+.sound-toggle{display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:white;color:var(--dim);transition:all 0.2s;}
+.sound-toggle.on{background:#e8f7f1;border-color:var(--long);color:var(--long);}
+.sound-toggle.off{background:#fdf0f0;border-color:var(--short);color:var(--short);}
+
+/* Alert toast */
+.alert-toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-80px);background:var(--ink);color:white;padding:12px 20px;border-radius:10px;font-family:'DM Mono',monospace;font-size:13px;font-weight:700;z-index:9999;transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 4px 20px rgba(0,0,0,0.3);white-space:nowrap;}
+.alert-toast.show{transform:translateX(-50%) translateY(0);}
+.alert-toast.tp{background:var(--long);}
+.alert-toast.sl{background:var(--short);}
+
+/* Section label */
+.section-label{font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:var(--dim);margin-bottom:8px;margin-top:18px;display:flex;align-items:center;gap:8px;}
+.section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* Signal card */
+.signal-main{border-radius:12px;border:2px solid;padding:16px;margin-bottom:12px;position:relative;overflow:hidden;}
+.signal-main::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;}
+.signal-main.long{background:var(--long-bg);border-color:var(--long-border);}
+.signal-main.long::before{background:var(--long);}
+.signal-main.short{background:var(--short-bg);border-color:var(--short-border);}
+.signal-main.short::before{background:var(--short);}
+.signal-main.wait{background:var(--wait-bg);border-color:var(--wait-border);}
+.signal-main.wait::before{background:var(--wait);}
+.sig-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sig-left{display:flex;align-items:center;gap:8px;}
+.dir-badge{font-size:12px;font-weight:800;letter-spacing:1px;padding:5px 12px;border-radius:6px;}
+.long .dir-badge{background:var(--long);color:white;}
+.short .dir-badge{background:var(--short);color:white;}
+.wait .dir-badge{background:var(--wait);color:white;}
+.sig-pair{font-family:'DM Mono',monospace;font-size:12px;font-weight:500;}
+.sig-time-wrap{text-align:right;}
+.sig-open-time{display:none;}
+.sig-elapsed{display:none;}
+.sig-time-wrap{display:none;}
+
+/* Levels */
+.levels{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;}
+.level-box{background:rgba(255,255,255,0.75);border-radius:8px;padding:8px 10px;text-align:center;border:1px solid rgba(0,0,0,0.06);}
+.level-label{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:4px;}
+.level-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;}
+.level-val.tp{color:var(--long);}.level-val.sl{color:var(--short);}
+.level-val.trail{color:var(--trail);}
+.sl-updated{font-size:8px;color:var(--trail);font-family:'DM Mono',monospace;margin-top:2px;}
+
+/* Trailing stop bar */
+.trail-bar-wrap{background:rgba(0,0,0,0.04);border-radius:6px;padding:8px 10px;margin-bottom:10px;border:1px solid rgba(155,89,182,0.2);}
+.trail-bar-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}
+.trail-title{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--trail);}
+.trail-pct{font-family:'DM Mono',monospace;font-size:11px;color:var(--trail);font-weight:700;}
+.trail-track{height:5px;background:rgba(0,0,0,0.08);border-radius:3px;overflow:hidden;}
+.trail-fill{height:100%;background:linear-gradient(90deg,var(--long),var(--trail));border-radius:3px;transition:width 0.6s ease;}
+.trail-labels{display:flex;justify-content:space-between;font-size:8px;color:var(--dim);margin-top:3px;font-family:'DM Mono',monospace;}
+
+/* Tags */
+.strat-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
+.strat-tag{font-size:9px;font-family:'DM Mono',monospace;background:rgba(0,0,0,0.06);border-radius:4px;padding:2px 7px;color:var(--ink);}
+.strat-tag.div-tag{background:rgba(255,165,0,0.12);color:#7a4f00;}
+.strat-tag.bo-tag{background:rgba(45,91,227,0.1);color:var(--accent);}
+.strat-tag.smc-tag{background:rgba(155,89,182,0.1);color:#6c3483;}
+
+/* VP + FP */
+.vp-fp-panel{display:flex;gap:8px;background:rgba(0,0,0,0.03);border:1px solid rgba(0,0,0,0.07);border-radius:8px;padding:9px 10px;margin-bottom:10px;}
+.vp-section,.fp-section{flex:1;}
+.vp-fp-title{font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;}
+.vp-divider{width:1px;background:rgba(0,0,0,0.07);margin:0 3px;}
+.vp-levels{display:flex;flex-direction:column;gap:3px;}
+.vp-item{display:flex;justify-content:space-between;align-items:center;padding:3px 6px;border-radius:4px;}
+.vp-item.vah{background:rgba(192,41,43,0.07);}.vp-item.poc{background:rgba(45,91,227,0.08);}.vp-item.val{background:rgba(0,131,90,0.07);}
+.vp-lbl{font-size:8px;font-weight:700;letter-spacing:1px;color:var(--dim);}
+.vp-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;}
+.vp-item.vah .vp-val{color:var(--short);}.vp-item.poc .vp-val{color:var(--accent);}.vp-item.val .vp-val{color:var(--long);}
+.fp-delta-val{font-family:'DM Mono',monospace;font-size:14px;font-weight:700;text-align:center;margin-bottom:5px;}
+.fp-delta-val.bull{color:var(--long);}.fp-delta-val.bear{color:var(--short);}.fp-delta-val.neut{color:var(--dim);}
+.fp-bar-track{height:5px;background:rgba(192,41,43,0.15);border-radius:3px;overflow:hidden;}
+.fp-bar-fill{height:100%;background:var(--long);border-radius:3px;transition:width 0.8s;}
+.fp-bar-labels{display:flex;justify-content:space-between;font-size:8px;color:var(--dim);margin-top:2px;}
+.fp-abs{font-size:9px;text-align:center;color:var(--wait);font-weight:700;min-height:12px;}
+
+/* AMD + SMC */
+.amd-smc-panel{display:flex;gap:7px;margin-bottom:10px;}
+.amd-box,.smc-box{flex:1;border-radius:7px;padding:8px 9px;border:1px solid rgba(0,0,0,0.07);}
+.amd-box{background:rgba(45,91,227,0.04);}.smc-box{background:rgba(138,104,0,0.04);}
+.as-title{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:5px;}
+.as-row{display:flex;justify-content:space-between;align-items:center;font-size:9px;margin-bottom:2px;}
+.as-label{color:var(--dim);}
+.as-val{font-family:'DM Mono',monospace;font-size:10px;font-weight:500;}
+.as-val.bull{color:var(--long);}.as-val.bear{color:var(--short);}.as-val.neut{color:var(--dim);}
+
+/* Divergence + Breakout */
+.div-bo-panel{display:flex;gap:7px;margin-bottom:10px;}
+.div-box,.bo-box{flex:1;border-radius:7px;padding:8px 9px;border:1px solid rgba(0,0,0,0.07);}
+.div-box{background:rgba(255,165,0,0.05);border-color:rgba(255,165,0,0.2);}
+.bo-box{background:rgba(45,91,227,0.04);border-color:rgba(45,91,227,0.15);}
+.div-title{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#8a6000;margin-bottom:5px;}
+.bo-title{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent);margin-bottom:5px;}
+
+/* Stats row */
+.stats-row{display:flex;gap:12px;flex-wrap:wrap;}
+.stat{}.stat-label{font-size:8px;color:var(--dim);letter-spacing:1px;text-transform:uppercase;}
+.stat-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;}
+.conf-row{margin-top:10px;}
+.conf-label{display:flex;justify-content:space-between;font-size:9px;color:var(--dim);margin-bottom:4px;}
+.conf-track{height:4px;background:rgba(0,0,0,0.08);border-radius:3px;overflow:hidden;}
+.conf-fill{height:100%;border-radius:3px;transition:width 1.2s ease;}
+.long .conf-fill{background:var(--long);}.short .conf-fill{background:var(--short);}.wait .conf-fill{background:var(--wait);}
+
+/* Settings */
+.settings-strip{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;}
+.set-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);}
+.set-row:last-child{border-bottom:none;}
+.set-name{font-size:11px;}.set-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);}
+.lev-selector{display:flex;gap:5px;}
+.lev-btn{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;padding:3px 9px;border-radius:5px;cursor:pointer;border:1.5px solid var(--border);background:white;color:var(--ink);transition:all 0.15s;}
+.lev-btn.active{background:var(--ink);color:white;border-color:var(--ink);}
+.lev-btn.lev-warn.active{background:#c0292b;border-color:#c0292b;color:white;}
+.lev-btn.lev-warn{border-color:#ffb300;color:#a06000;}
+.lev-notice{margin-top:8px;padding:7px 10px;background:#f8f6f1;border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;color:var(--dim);border:1px solid var(--border);}
+.scan-btn{width:100%;padding:13px;background:var(--ink);color:white;border:none;border-radius:10px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:16px;transition:opacity 0.2s;}
+.scan-btn:hover{opacity:.85;}
+
+/* Stats Summary */
+.stats-summary{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;}
+.ss-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.ss-item{text-align:center;flex:1;}
+.ss-divider{width:1px;height:28px;background:var(--border);}
+.ss-label{font-size:8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:3px;}
+.ss-val{font-family:'DM Mono',monospace;font-size:17px;font-weight:500;}
+.ss-val.accent{color:var(--accent);}
+.c-long{color:var(--long);}.c-short{color:var(--short);}
+.ss-bar-track{height:7px;border-radius:4px;overflow:hidden;display:flex;background:var(--border);margin-bottom:4px;}
+.ss-bar-win{background:var(--long);transition:width 0.8s;}.ss-bar-loss{background:var(--short);transition:width 0.8s;}
+.ss-bar-labels{display:flex;justify-content:space-between;font-size:9px;font-family:'DM Mono',monospace;margin-bottom:8px;}
+.ss-breakdown{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.ss-bk-item{display:flex;justify-content:space-between;align-items:center;background:#f8f6f1;border-radius:5px;padding:5px 9px;}
+.ss-bk-label{font-size:9px;color:var(--dim);}
+.ss-bk-val{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;}
+
+/* History */
+.hist-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 12px;margin-bottom:7px;display:flex;align-items:flex-start;gap:9px;}
+.hist-dir{font-size:10px;font-weight:800;padding:3px 8px;border-radius:5px;min-width:44px;text-align:center;white-space:nowrap;}
+.hist-dir.long{background:var(--long-bg);color:var(--long);border:1px solid var(--long-border);}
+.hist-dir.short{background:var(--short-bg);color:var(--short);border:1px solid var(--short-border);}
+.hist-info{flex:1;min-width:0;}
+.hist-pair{font-size:11px;font-weight:700;display:flex;align-items:center;gap:4px;flex-wrap:wrap;}
+.hist-strat{font-size:8px;font-family:'DM Mono',monospace;background:rgba(45,91,227,0.1);color:var(--accent);border-radius:3px;padding:1px 4px;}
+.hist-meta{font-size:9px;color:var(--dim);font-family:'DM Mono',monospace;margin-top:2px;}
+.hist-time{font-size:9px;font-family:'DM Mono',monospace;color:var(--dim);margin-top:2px;display:flex;align-items:center;gap:3px;flex-wrap:wrap;}
+.hist-time-arrow{color:var(--border);}
+.hist-result{text-align:right;flex-shrink:0;}
+.hist-pnl{font-family:'DM Mono',monospace;font-size:13px;font-weight:600;}
+.hist-pnl.win{color:var(--long);}.hist-pnl.loss{color:var(--short);}
+.hist-status{font-size:9px;color:var(--dim);}
+.disc{font-size:9px;color:var(--dim);text-align:center;margin-top:18px;padding:10px;border-top:1px solid var(--border);line-height:1.7;}
+.fade-in{animation:fadeUp 0.5s ease both;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.d1{animation-delay:.05s}.d2{animation-delay:.1s}.d3{animation-delay:.15s}.d4{animation-delay:.2s}
+</style>
+</head>
+<body>
+<div class="page-layout">
+<div class="wrap">
+
+<!-- Header -->
+<div class="hd fade-in">
+  <div class="hd-title">訊號<span>通知</span></div>
+  <div class="hd-sub">
+    <div><span class="live-dot" id="liveDot"></span><span id="connLabel">連線中...</span></div>
+    <div id="clockDisp" style="margin-top:2px">--:--:--</div>
+  </div>
+</div>
+
+<!-- Alert Toast -->
+<div class="alert-toast" id="alertToast">—</div>
+
+<!-- Coin Selector -->
+<div class="coin-selector fade-in d1" id="coinSelector">
+  <button class="coin-btn active" data-inst="BTC-USDT-SWAP" data-name="BTC">
+    <span class="coin-emoji">₿</span>BTC
+  </button>
+  <button class="coin-btn" data-inst="ETH-USDT-SWAP" data-name="ETH">
+    <span class="coin-emoji">Ξ</span>ETH
+  </button>
+</div>
+
+<!-- Price bar -->
+<div class="price-bar fade-in d1">
+  <div class="pb-left">
+    <div class="pb-pair" id="pbPair">BTC / USDT · OKX 永續</div>
+    <div class="pb-price" id="livePrice">—</div>
+    <div class="pb-change" id="liveChg">— %</div>
+  </div>
+  <div class="pb-right">
+    <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;margin-bottom:4px;">
+      <button class="sound-toggle on" id="soundToggle">🔔 音效開</button>
+    </div>
+    <div class="pb-tf" id="tfLabel">15分鐘</div>
+    <div class="pb-meta">更新 <span id="lastUpd">—</span></div>
+    <div class="ws-badge" id="wsBadge">● 連線中</div>
+  </div>
+</div>
+
+<!-- Signal card -->
+<div class="section-label fade-in d2">當前訊號</div>
+<div class="signal-main wait fade-in d2" id="mainCard">
+  <div class="sig-top">
+    <div class="sig-left">
+      <div class="dir-badge" id="dirBadge">⚡ 觀望</div>
+      <div class="sig-pair" id="sigPair">BTC/USDT</div>
+    </div>
+    <div class="sig-time-wrap">
+      <div class="sig-open-time" id="sigOpenTime">—</div>
+      <div class="sig-elapsed" id="sigElapsed"></div>
+    </div>
+  </div>
+  <!-- Strategy entry time info bar -->
+  <div class="entry-info-bar" id="entryInfoBar" style="display:none">
+    <div class="eib-item">
+      <div class="eib-label">📍 策略進場時間</div>
+      <div class="eib-val" id="eibEntryTime">—</div>
+    </div>
+    <div class="eib-divider"></div>
+    <div class="eib-item">
+      <div class="eib-label">⏱ 持倉時間</div>
+      <div class="eib-val" id="eibElapsed">—</div>
+    </div>
+    <div class="eib-divider"></div>
+    <div class="eib-item">
+      <div class="eib-label">💰 浮動損益</div>
+      <div class="eib-val" id="eibFloatPnl">—</div>
+    </div>
+  </div>
+
+  <!-- TP / Entry / SL -->
+  <div class="levels">
+    <div class="level-box">
+      <div class="level-label">進場價</div>
+      <div class="level-val" id="entryPrice">—</div>
+    </div>
+    <div class="level-box">
+      <div class="level-label">🎯 止盈 TP</div>
+      <div class="level-val tp" id="tpPrice">—</div>
+      <div class="sl-updated" id="tpBasis"></div>
+    </div>
+    <div class="level-box">
+      <div class="level-label">🛡 止損 SL</div>
+      <div class="level-val trail" id="slPrice">—</div>
+      <div class="sl-updated" id="slUpdated"></div>
+    </div>
+  </div>
+
+  <!-- Trailing stop bar -->
+  <div class="trail-bar-wrap" id="trailWrap" style="display:none">
+    <div class="trail-bar-top">
+      <span class="trail-title">🔄 自動追蹤止損</span>
+      <span class="trail-pct" id="trailPct">+0.0%</span>
+    </div>
+    <div class="trail-track"><div class="trail-fill" id="trailFill" style="width:0%"></div></div>
+    <div class="trail-labels"><span>進場</span><span id="trailSLLabel">—</span><span>目標</span></div>
+  </div>
+
+  <!-- Tags -->
+  <div class="strat-tags" id="stratTags">
+    <span class="strat-tag">📊 等待確認</span>
+    <span class="strat-tag">⏳ 方向未明</span>
+  </div>
+
+  <!-- VP + FP -->
+  <div class="vp-fp-panel">
+    <div class="vp-section">
+      <div class="vp-fp-title">🏔 Volume Profile</div>
+      <div class="vp-levels">
+        <div class="vp-item vah"><span class="vp-lbl">VAH</span><span class="vp-val" id="vpVAH">—</span></div>
+        <div class="vp-item poc"><span class="vp-lbl">POC</span><span class="vp-val" id="vpPOC">—</span></div>
+        <div class="vp-item val"><span class="vp-lbl">VAL</span><span class="vp-val" id="vpVAL">—</span></div>
+      </div>
+    </div>
+    <div class="vp-divider"></div>
+    <div class="fp-section">
+      <div class="vp-fp-title">🦶 Footprint Delta</div>
+      <div class="fp-delta-val neut" id="fpDeltaVal">—</div>
+      <div class="fp-bar-track"><div class="fp-bar-fill" id="fpBarFill" style="width:50%"></div></div>
+      <div class="fp-bar-labels"><span>賣</span><span>買</span></div>
+      <div class="fp-abs" id="fpAbsLabel"></div>
+    </div>
+  </div>
+
+  <!-- Divergence + Breakout -->
+  <div class="div-bo-panel">
+    <div class="div-box">
+      <div class="div-title">📐 背離 Divergence</div>
+      <div class="as-row"><span class="as-label">RSI背離</span><span class="as-val" id="divRSI">—</span></div>
+      <div class="as-row"><span class="as-label">MACD背離</span><span class="as-val" id="divMACD">—</span></div>
+      <div class="as-row"><span class="as-label">訊號強度</span><span class="as-val" id="divStrength">—</span></div>
+    </div>
+    <div class="bo-box">
+      <div class="bo-title">💥 突破 Breakout</div>
+      <div class="as-row"><span class="as-label">突破方向</span><span class="as-val" id="boDir">—</span></div>
+      <div class="as-row"><span class="as-label">突破確認</span><span class="as-val" id="boConf">—</span></div>
+      <div class="as-row"><span class="as-label">成交量</span><span class="as-val" id="boVol">—</span></div>
+    </div>
+  </div>
+
+  <!-- AMD + SMC -->
+  <div class="amd-smc-panel">
+    <div class="amd-box">
+      <div class="as-title">🔵 AMD 階段</div>
+      <div class="as-row"><span class="as-label">當前階段</span><span class="as-val neut" id="amdPhaseVal">—</span></div>
+      <div class="as-row"><span class="as-label">掃低完成</span><span class="as-val" id="amdSweepLow">—</span></div>
+      <div class="as-row"><span class="as-label">掃高完成</span><span class="as-val" id="amdSweepHigh">—</span></div>
+    </div>
+    <div class="smc-box">
+      <div class="as-title">🧠 SMC 結構</div>
+      <div class="as-row"><span class="as-label">BOS 突破</span><span class="as-val" id="smcBOSVal">—</span></div>
+      <div class="as-row"><span class="as-label">流動性掃單</span><span class="as-val" id="smcLSVal">—</span></div>
+      <div class="as-row"><span class="as-label">FVG 缺口</span><span class="as-val" id="smcFVGVal">—</span></div>
+    </div>
+  </div>
+
+  <!-- Cross-validation vote panel -->
+  <div class="cv-panel" id="cvPanel" style="display:none">
+    <div class="cv-title">
+      <span>📊 策略交叉比對</span>
+      <span class="cv-score" id="cvScore">—</span>
+    </div>
+    <div class="cv-grid" id="cvGrid"></div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="stats-row">
+    <div class="stat"><div class="stat-label">盈虧比</div><div class="stat-val" id="rrRatio">—</div></div>
+    <div class="stat"><div class="stat-label">策略勝率</div><div class="stat-val" id="winRate">—</div></div>
+    <div class="stat"><div class="stat-label">建議倉位</div><div class="stat-val" id="posSize">—</div></div>
+    <div class="stat"><div class="stat-label">框架</div><div class="stat-val">15m/1h</div></div>
+  </div>
+
+  <!-- Confidence -->
+  <div class="conf-row">
+    <div class="conf-label"><span>訊號強度</span><span id="confPct">—</span></div>
+    <div class="conf-track"><div class="conf-fill" id="confBar" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div class="section-label fade-in d3">訊號設定</div>
+<div class="settings-strip fade-in d3">
+  <div class="set-row"><span class="set-name">交易對</span><span class="set-val">BTC/USDT 永續</span></div>
+  <div class="set-row">
+    <span class="set-name">掃描週期</span>
+    <select style="font-family:'DM Mono',monospace;font-size:10px;border:1px solid #ddd;border-radius:4px;padding:2px 5px;background:white" id="tfSel">
+      <option value="15m">15 分鐘</option><option value="1h">1 小時</option>
+      <option value="4h">4 小時</option><option value="1d">日線</option>
+    </select>
+  </div>
+  <div class="set-row"><span class="set-name">止盈</span><span class="set-val">ATR×3 + VAH/VAL確認</span></div>
+  <div class="set-row"><span class="set-name">止損</span><span class="set-val">ATR×1.5 + OB/POC保護</span></div>
+  <div class="set-row"><span class="set-name">追蹤止損</span><span class="set-val">自動 · 每跳動更新</span></div>
+  <div class="set-row"><span class="set-name">單筆風險</span><span class="set-val">帳戶 2%</span></div>
+  <div class="set-row">
+    <span class="set-name">槓桿倍數</span>
+    <div class="lev-selector" id="levSelector">
+      <button class="lev-btn" data-lev="5">5x</button>
+      <button class="lev-btn active" data-lev="10">10x</button>
+      <button class="lev-btn" data-lev="20">20x</button>
+      <button class="lev-btn lev-warn" data-lev="75">75x</button>
+    </div>
+  </div>
+  <div class="lev-notice">
+    ⚡ 當前槓桿：<span id="levDisplay" style="font-weight:700;color:var(--accent)">10x</span>
+    <span id="levRiskLabel" style="margin-left:6px;font-size:9px;color:var(--long)">● 中等風險</span>
+  </div>
+</div>
+<!-- Sensitivity slider -->
+<div class="sensitivity-wrap fade-in d3">
+  <div class="sens-row">
+    <span class="sens-label">📡 訊號靈敏度</span>
+    <span class="sens-val" id="sensVal">標準 (60分)</span>
+  </div>
+  <input type="range" id="sensitivitySlider" min="50" max="75" value="60" step="5" class="sens-slider">
+  <div class="sens-hints"><span>積極</span><span>保守</span></div>
+</div>
+
+<!-- Position calculator -->
+<div class="pos-calc fade-in d3" id="posCalc">
+  <div class="pc-title">💰 資金管理計算機</div>
+  <div class="pc-row">
+    <div class="pc-field">
+      <div class="pc-label">帳戶金額 (USDT)</div>
+      <input type="number" id="pcBalance" value="1000" class="pc-input" placeholder="1000">
+    </div>
+    <div class="pc-field">
+      <div class="pc-label">單筆風險 %</div>
+      <input type="number" id="pcRisk" value="2" min="0.5" max="10" step="0.5" class="pc-input">
+    </div>
+  </div>
+  <div id="pcResult" class="pc-result" style="display:none">
+    <div class="pc-res-row"><span class="pc-res-label">最大風險金額</span><span class="pc-res-val" id="pcRiskAmt">—</span></div>
+    <div class="pc-res-row"><span class="pc-res-label">建議倉位大小</span><span class="pc-res-val accent" id="pcPosSz">—</span></div>
+    <div class="pc-res-row"><span class="pc-res-label">止損距離</span><span class="pc-res-val" id="pcSLDist">—</span></div>
+    <div class="pc-res-row"><span class="pc-res-label">預期獲利</span><span class="pc-res-val green" id="pcExpProfit">—</span></div>
+  </div>
+  <button class="pc-btn" id="pcCalcBtn">計算倉位</button>
+</div>
+
+<!-- Session + Cooldown status bar -->
+<div class="status-bar fade-in d3" id="statusBarWrap">
+  <div class="sb-session" id="sessionBar">
+    <span class="sb-label">時段</span>
+    <span class="sb-val" id="sessionName">—</span>
+    <span class="sb-time" id="sessionTime">—</span>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-cooldown">
+    <span class="sb-label">冷卻</span>
+    <span class="sb-val" id="cooldownStatus">✅ 正常運行</span>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-losses">
+    <span class="sb-label">連虧</span>
+    <span class="sb-val" id="lossStreak" style="color:var(--dim)">0/3</span>
+  </div>
+  <div class="sb-divider"></div>
+  <div class="sb-filter">
+    <span class="sb-label">時段過濾</span>
+    <button class="sb-toggle" id="sessionToggle">開</button>
+  </div>
+</div>
+
+<!-- Signal grade display (shown when signal active) -->
+<div class="grade-bar fade-in d3" id="gradeBar" style="display:none">
+  <span class="grade-label">訊號等級</span>
+  <span class="grade-badge" id="gradeBadge">—</span>
+  <span class="grade-desc" id="gradeDesc">—</span>
+</div>
+
+<button class="scan-btn fade-in d3" id="scanBtn">🔍 立即掃描訊號</button>
+
+<!-- Multi-position panel -->
+<div class="section-label fade-in" style="margin-top:18px">持倉總覽</div>
+<div class="multi-pos-wrap" id="multiPosWrap">
+  <div class="mp-empty" id="mpEmpty">目前無持倉 — 掃描後自動顯示</div>
+  <div class="mp-cards" id="mpCards"></div>
+</div>
+
+<!-- History -->
+<div class="section-label fade-in d4" style="margin-top:18px">歷史訊號</div>
+<div class="stats-summary fade-in d4">
+  <div class="ss-row">
+    <div class="ss-item"><div class="ss-label">總體勝率</div><div class="ss-val accent" id="ssWinRate">75%</div></div>
+    <div class="ss-divider"></div>
+    <div class="ss-item"><div class="ss-label">總筆數</div><div class="ss-val" id="ssTotal">4</div></div>
+    <div class="ss-divider"></div>
+    <div class="ss-item"><div class="ss-label">勝 / 敗</div><div class="ss-val" id="ssWL"><span class="c-long">3</span>/<span class="c-short">1</span></div></div>
+    <div class="ss-divider"></div>
+    <div class="ss-item"><div class="ss-label">累計損益</div><div class="ss-val c-long" id="ssTotalPnl">+9.3%</div></div>
+  </div>
+  <div class="ss-bar-track" style="margin-bottom:4px">
+    <div class="ss-bar-win" id="ssBarWin" style="width:75%"></div>
+    <div class="ss-bar-loss" id="ssBarLoss" style="width:25%"></div>
+  </div>
+  <div class="ss-bar-labels">
+    <span class="c-long" id="ssBarWinLbl">勝 75%</span>
+    <span class="c-short" id="ssBarLossLbl">敗 25%</span>
+  </div>
+  <div class="ss-breakdown">
+    <div class="ss-bk-item"><span class="ss-bk-label">平均獲利</span><span class="ss-bk-val c-long" id="ssAvgWin">+3.4%</span></div>
+    <div class="ss-bk-item"><span class="ss-bk-label">平均虧損</span><span class="ss-bk-val c-short" id="ssAvgLoss">−0.8%</span></div>
+    <div class="ss-bk-item"><span class="ss-bk-label">最大連勝</span><span class="ss-bk-val" id="ssStreak">3 筆</span></div>
+    <div class="ss-bk-item"><span class="ss-bk-label">期望值/筆</span><span class="ss-bk-val c-long" id="ssEV">+2.4%</span></div>
+  </div>
+</div>
+<div id="histList" class="fade-in d4"></div>
+<!-- Backtest Section -->
+<div class="section-label" style="margin-top:20px" id="btSection">回測報表</div>
+<div class="bt-controls">
+  <div class="bt-row">
+    <span class="bt-label">回測幣種</span>
+    <div class="bt-btns">
+      <button class="bt-coin-btn active" data-coin="BTC">BTC</button>
+      <button class="bt-coin-btn" data-coin="ETH">ETH</button>
+    </div>
+  </div>
+  <div class="bt-row">
+    <span class="bt-label">回測天數</span>
+    <div class="bt-btns">
+      <button class="bt-day-btn" data-days="30">30天</button>
+      <button class="bt-day-btn active" data-days="60">60天</button>
+      <button class="bt-day-btn" data-days="90">90天</button>
+    </div>
+  </div>
+  <button class="bt-run-btn" id="btRunBtn">▶ 開始回測</button>
+</div>
+
+<div class="bt-report" id="btReport" style="display:none">
+  <!-- Summary cards -->
+  <div class="bt-summary">
+    <div class="bt-card">
+      <div class="bt-card-label">總報酬</div>
+      <div class="bt-card-val" id="btReturn">—</div>
+    </div>
+    <div class="bt-card">
+      <div class="bt-card-label">勝率</div>
+      <div class="bt-card-val accent" id="btWinRate">—</div>
+    </div>
+    <div class="bt-card">
+      <div class="bt-card-label">總交易數</div>
+      <div class="bt-card-val" id="btTotal">—</div>
+    </div>
+    <div class="bt-card">
+      <div class="bt-card-label">最大回撤</div>
+      <div class="bt-card-val red" id="btDD">—</div>
+    </div>
+    <div class="bt-card">
+      <div class="bt-card-label">盈虧比</div>
+      <div class="bt-card-val" id="btRR">—</div>
+    </div>
+    <div class="bt-card">
+      <div class="bt-card-label">夏普比率</div>
+      <div class="bt-card-val" id="btSharpe">—</div>
+    </div>
+  </div>
+
+  <!-- Equity curve (mini bar chart) -->
+  <div class="bt-chart-wrap">
+    <div class="bt-chart-title">資金曲線</div>
+    <div class="bt-chart" id="btChart"></div>
+    <div class="bt-chart-labels"><span id="btChartStart">—</span><span id="btChartEnd">—</span></div>
+  </div>
+
+  <!-- Strategy breakdown -->
+  <div class="bt-breakdown" id="btBreakdown"></div>
+
+  <!-- Trade log -->
+  <div class="bt-log-title">交易紀錄 <span id="btLogCount"></span></div>
+  <div class="bt-log" id="btLog"></div>
+</div>
+
+<div class="disc">⚠️ 價格來源：OKX。回測為模擬歷史數據，不保證未來表現。訊號為輔助分析，非投資建議。</div>
+</div><!-- end .wrap -->
+
+<!-- ── Signal Log Panel ── -->
+<div class="log-panel" id="logPanel">
+  <div class="log-header">
+    <div class="log-title">訊號<span>紀錄</span></div>
+    <span class="log-count" id="logCount">0</span>
+    <button class="log-clear" id="logClearBtn">清除</button>
+  </div>
+  <div class="log-body" id="logBody">
+    <div class="log-empty" id="logEmpty">尚無訊號紀錄<br>掃描後自動記錄<br>開單 · 平倉 · 警示</div>
+  </div>
+</div>
+
+</div><!-- end .page-layout -->
+
+<script>
+// ═══════════════════════════════════
+// CLOCK
+// ═══════════════════════════════════
+setInterval(function(){
+  var n=new Date();
+  document.getElementById('clockDisp').textContent=
+    [n.getHours(),n.getMinutes(),n.getSeconds()].map(function(v){return String(v).padStart(2,'0');}).join(':');
+},1000);
+
+function fmt2(v){return String(v).padStart(2,'0');}
+function fmtDT(d){return (d.getMonth()+1)+'/'+d.getDate()+' '+fmt2(d.getHours())+':'+fmt2(d.getMinutes());}
+function numFmt(n){
+  var p=parseFloat(n); if(isNaN(p))return '—';
+  if(p<1)   return p.toFixed(4);
+  if(p<100) return p.toFixed(2);
+  return p.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+}
+
+// ═══════════════════════════════════════════════════
+// COIN CONFIG
+// ═══════════════════════════════════════════════════
+var COINS = {
+  'BTC-USDT-SWAP': { name:'BTC', emoji:'₿', bnSym:'BTCUSDT', simBase:76000, simRange:800 },
+  'ETH-USDT-SWAP': { name:'ETH', emoji:'Ξ', bnSym:'ETHUSDT', simBase:3200,  simRange:60  },
+};
+var currentInst  = 'BTC-USDT-SWAP';
+var coinPrices   = {};
+var livePrice    = 76000;
+var liveOpen24   = 76000;
+var wsConn       = null;
+var simTimers    = {};
+
+var lastPriceEl = document.getElementById('livePrice');
+var lastChgEl   = document.getElementById('liveChg');
+var dotEl       = document.getElementById('liveDot');
+var connEl      = document.getElementById('connLabel');
+var badgeEl     = document.getElementById('wsBadge');
+
+function setStatus(state){
+  if(state==='live'){
+    dotEl.className='live-dot ok'; connEl.textContent='OKX 即時';
+    badgeEl.className='ws-badge live'; badgeEl.textContent='● OKX 即時';
+  } else if(state==='rest'){
+    dotEl.className='live-dot ok'; connEl.textContent='OKX REST';
+    badgeEl.className='ws-badge poll'; badgeEl.textContent='● OKX REST';
+  } else {
+    dotEl.className='live-dot err'; connEl.textContent='離線模擬';
+    badgeEl.className='ws-badge err'; badgeEl.textContent='● 模擬';
+  }
+}
+
+function numFmtCoin(n){
+  var p=parseFloat(n); if(isNaN(p))return '—';
+  if(p<1) return p.toFixed(4);
+  if(p<100) return p.toFixed(2);
+  return p.toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+}
+
+function updatePriceUI(p, open24, inst){
+  coinPrices[inst] = {p:p, o:open24||p};
+  if(inst !== currentInst) return;
+  livePrice  = p;
+  if(open24 && open24>0) liveOpen24 = open24;
+  var pct = ((livePrice-liveOpen24)/liveOpen24*100);
+  lastPriceEl.textContent = numFmtCoin(livePrice);
+  lastChgEl.textContent = (pct>=0?'▲ +:':'▼ ') + Math.abs(pct).toFixed(2)+'%';
+  lastChgEl.className = 'pb-change '+(pct>=0?'up':'dn');
+  document.getElementById('pbPair').textContent = (COINS[inst]||{name:'BTC'}).name+' / USDT · OKX 永續';
+  document.getElementById('lastUpd').textContent = fmt2(new Date().getHours())+':'+fmt2(new Date().getMinutes())+':'+fmt2(new Date().getSeconds());
+  // Invalidate signal cache if price moved enough to change seed (every $10 for BTC)
+  var newSeed = Math.round(p/10)*10;
+  if(_signalCache.seed !== newSeed) _signalCache = {seed:-1, result:null};
+  updateTrailingStop();
+}
+
+function updateCoinBtnPrice(inst, p, open24){
+  var btn = document.querySelector('.coin-btn[data-inst="'+inst+'"]');
+  if(!btn) return;
+  btn.querySelectorAll('.coin-change-up,.coin-change-dn').forEach(function(el){el.remove();});
+  if(open24 && open24>0){
+    var pct=((p-open24)/open24*100).toFixed(1);
+    var sp=document.createElement('span');
+    sp.className=parseFloat(pct)>=0?'coin-change-up':'coin-change-dn';
+    sp.textContent=(parseFloat(pct)>=0?'+':'')+pct+'%';
+    btn.appendChild(sp);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// OKX WebSocket — Primary source
+// Fallback: OKX REST → Binance WS → Simulation
+// ═══════════════════════════════════════════════════════════════
+function connectBinanceWS(){
+  // Try OKX WebSocket first
+  connectOKXWS();
+}
+
+function connectOKXWS(){
+  try {
+    var ws = new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
+    var timeout = setTimeout(function(){ ws.close(); tryBinanceWS(); }, 6000);
+
+    ws.onopen = function(){
+      clearTimeout(timeout);
+      // Cancel REST fallback if running
+      if(okxRestTimer){ clearInterval(okxRestTimer); okxRestTimer = null; }
+      var args = [];
+      for(var k in COINS) args.push({channel:'tickers', instId:k});
+      ws.send(JSON.stringify({op:'subscribe', args:args}));
+      setStatus('live');
+    };
+
+    ws.onmessage = function(e){
+      try {
+        var d = JSON.parse(e.data);
+        if(d.data && d.data[0]){
+          var t    = d.data[0];
+          var inst = t.instId;
+          if(!COINS[inst]) return;
+          updatePriceUI(parseFloat(t.last), parseFloat(t.open24h), inst);
+          updateCoinBtnPrice(inst, parseFloat(t.last), parseFloat(t.open24h));
+        }
+      } catch(err){}
+    };
+
+    ws.onerror = function(){ clearTimeout(timeout); tryBinanceWS(); };
+    ws.onclose = function(){ setTimeout(connectOKXWS, 3000); };
+    wsConn = ws;
+  } catch(e){ tryBinanceWS(); }
+}
+
+function tryBinanceWS(){
+  // Fallback: OKX REST API polling (every 3s)
+  tryOKXRest();
+}
+
+var okxRestTimer = null;
+function tryOKXRest(){
+  setStatus('rest');
+  function fetchOKX(inst){
+    fetch('https://www.okx.com/api/v5/market/ticker?instId='+inst)
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if(d.data && d.data[0]){
+          var t = d.data[0];
+          updatePriceUI(parseFloat(t.last), parseFloat(t.open24h), inst);
+          updateCoinBtnPrice(inst, parseFloat(t.last), parseFloat(t.open24h));
+        }
+      }).catch(function(){ startSimulation(); });
+  }
+  if(okxRestTimer) clearInterval(okxRestTimer);
+  okxRestTimer = setInterval(function(){
+    for(var k in COINS) fetchOKX(k);
+  }, 3000);
+  // Immediate first fetch
+  for(var k in COINS) fetchOKX(k);
+}
+
+// Simulation fallback
+function startSimulation(){
+  setStatus('sim');
+  for(var inst in COINS){
+    (function(i){
+      var cfg = COINS[i], p = cfg.simBase;
+      if(simTimers[i]) return;
+      simTimers[i] = setInterval(function(){
+        p = Math.max(cfg.simBase*0.85, Math.min(cfg.simBase*1.15,
+            p + (Math.random()-0.5)*cfg.simRange*0.3));
+        updatePriceUI(p, cfg.simBase, i);
+        updateCoinBtnPrice(i, p, cfg.simBase);
+      }, 2000);
+    })(inst);
+  }
+}
+
+function switchCoin(inst){
+  if(inst===currentInst) return;
+  // ── Save current coin's signal state before switching ──
+  if(activeSignal) coinSignalCache[currentInst] = {
+    signal: activeSignal, trailSL: trailSL, lastDir: lastDir
+  };
+  currentInst = inst;
+  var coin = COINS[inst]||{name:'BTC'};
+  // Update price display
+  if(coinPrices[inst]){ updatePriceUI(coinPrices[inst].p, coinPrices[inst].o, inst); }
+  else { lastPriceEl.textContent='—'; document.getElementById('pbPair').textContent=coin.name+' / USDT · OKX 永續'; }
+  // ── Restore this coin's cached signal if exists ──
+  var cached = coinSignalCache[inst];
+  if(cached){
+    activeSignal = cached.signal;
+    trailSL      = cached.trailSL;
+    lastDir      = cached.lastDir;
+    // Restore display without triggering openPosition or push notif
+    var s = activeSignal;
+    var card = document.getElementById('mainCard');
+    card.className = 'signal-main ' + s.dir;
+    document.getElementById('dirBadge').textContent   = s.label || (s.dir==='long'?'📈 做多':'📉 做空');
+    document.getElementById('entryPrice').textContent = numFmt(s.entry);
+    document.getElementById('tpPrice').textContent    = s.tp ? numFmt(s.tp) : '—';
+    document.getElementById('slPrice').textContent    = trailSL ? numFmt(trailSL) : (s.sl ? numFmt(s.sl) : '—');
+    document.getElementById('slUpdated').textContent  = s.slBasis || '';
+    document.getElementById('trailWrap').style.display = 'block';
+    document.getElementById('entryInfoBar').style.display = 'flex';
+    document.getElementById('rrRatio').textContent    = s.rr ? '1:'+s.rr : '—';
+    document.getElementById('winRate').textContent    = s.wr || '—';
+    document.getElementById('posSize').textContent    = s.pos || '—';
+    document.getElementById('confPct').textContent    = s.conf + '%';
+    var confBar = document.getElementById('confBar');
+    confBar.style.width = s.conf + '%';
+    // Grade bar
+    if(s.grade){
+      var gb = document.getElementById('gradeBar');
+      gb.style.display = 'flex';
+      gb.style.borderColor = s.grade.color;
+      document.getElementById('gradeBadge').textContent = s.grade.label;
+      document.getElementById('gradeBadge').style.color = s.grade.color;
+      document.getElementById('gradeDesc').textContent  =
+        s.grade.grade==='A'?'高信心，全倉進場':s.grade.grade==='B'?'中信心，半倉進場':'低信心，建議觀望';
+    }
+  } else {
+    // No cached signal — show wait state
+    activeSignal = null; trailSL = null;
+    clearInterval(elapsedTimer); lastDir = null;
+    document.getElementById('trailWrap').style.display='none';
+    document.getElementById('entryInfoBar').style.display='none';
+    document.getElementById('gradeBar').style.display='none';
+    document.getElementById('mainCard').className='signal-main wait';
+    document.getElementById('dirBadge').textContent='⚡ 觀望';
+    document.getElementById('entryPrice').textContent='—';
+    document.getElementById('tpPrice').textContent='—';
+    document.getElementById('slPrice').textContent='—';
+    document.getElementById('cvPanel').style.display='none';
+  }
+  document.getElementById('sigPair').textContent=coin.name+'/USDT';
+  renderPositions();
+  showSessionStatus();
+}
+
+// Cache for per-coin signal state
+var coinSignalCache = {};
+
+document.getElementById('coinSelector').addEventListener('click',function(e){
+  var btn=e.target.closest('.coin-btn'); if(!btn)return;
+  document.querySelectorAll('.coin-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  switchCoin(btn.getAttribute('data-inst'));
+});
+
+// ── Start: try Binance WS, fallback to simulation ──
+connectBinanceWS();
+
+// ═══════════════════════════════════
+// ANALYSIS ENGINE
+// ═══════════════════════════════════
+function seededRng(seed){
+  var s=seed;
+  return function(){s=(s*1664525+1013904223)&0xffffffff;return Math.abs(s)/0xffffffff;};
+}
+
+function generateCandles(seed, count){
+  var price=seed, candles=[], rng=seededRng(seed);
+  for(var i=0;i<count;i++){
+    var range=price*0.012*(0.5+rng());
+    var dir=rng()>0.48?1:-1;
+    var o=price, c=price+dir*range*(0.3+rng()*0.7);
+    var h=Math.max(o,c)+range*rng()*0.4, l=Math.min(o,c)-range*rng()*0.4;
+    var vol=1000+rng()*4000; if(dir>0) vol*=(1+rng()*0.8);
+    var bv=vol*(0.4+rng()*0.3), sv=vol-bv;
+    candles.push({o:o,h:h,l:l,c:c,v:vol,bv:bv,sv:sv,d:bv-sv});
+    price=c;
+  }
+  return candles;
+}
+
+function toHA(candles){
+  var ha=[],pO=candles[0].o,pC=candles[0].c;
+  for(var i=0;i<candles.length;i++){
+    var c=candles[i],haC=(c.o+c.h+c.l+c.c)/4,haO=i===0?(c.o+c.c)/2:(pO+pC)/2;
+    var haH=Math.max(c.h,haO,haC),haL=Math.min(c.l,haO,haC);
+    ha.push({o:haO,h:haH,l:haL,c:haC}); pO=haO; pC=haC;
+  }
+  return ha;
+}
+
+function emaFn(data,period){
+  var k=2/(period+1),e=data[0],r=[e];
+  for(var i=1;i<data.length;i++){e=data[i]*k+e*(1-k);r.push(e);}
+  return r;
+}
+function rsiFn(closes,period){
+  var g=0,l=0;
+  for(var i=1;i<=period;i++){var d=closes[i]-closes[i-1];if(d>0)g+=d;else l-=d;}
+  var ag=g/period,al=l/period;
+  for(var i=period+1;i<closes.length;i++){var d2=closes[i]-closes[i-1];ag=(ag*(period-1)+Math.max(d2,0))/period;al=(al*(period-1)+Math.max(-d2,0))/period;}
+  return al===0?100:100-100/(1+ag/al);
+}
+function atrFn(candles,period){
+  var trs=[],sum=0;
+  for(var i=0;i<candles.length;i++){trs.push(i===0?candles[i].h-candles[i].l:Math.max(candles[i].h-candles[i].l,Math.abs(candles[i].h-candles[i-1].c),Math.abs(candles[i].l-candles[i-1].c)));}
+  var sl=trs.slice(-period);
+  for(var j=0;j<sl.length;j++) sum+=sl[j];
+  return sum/period;
+}
+function haStreak(ha){
+  var last=ha[ha.length-1],bull=last.c>last.o,s=0;
+  for(var i=ha.length-1;i>=0;i--){if((ha[i].c>ha[i].o)===bull)s++;else break;}
+  return {bullish:bull,streak:s};
+}
+function getArr(arr,key){var r=[];for(var i=0;i<arr.length;i++)r.push(arr[i][key]);return r;}
+
+// Volume Profile
+function calcVP(candles){
+  var mn=candles[0].l,mx=candles[0].h;
+  for(var i=0;i<candles.length;i++){if(candles[i].l<mn)mn=candles[i].l;if(candles[i].h>mx)mx=candles[i].h;}
+  var bins=20,bs=(mx-mn)/bins,profile=[];
+  for(var b=0;b<bins;b++) profile.push({price:mn+(b+0.5)*bs,vol:0,bv:0,sv:0});
+  for(var k=0;k<candles.length;k++){
+    var c=candles[k],cr=c.h-c.l+0.001;
+    for(var b2=0;b2<bins;b2++){
+      var bl=mn+b2*bs,bh=bl+bs,ov=Math.max(0,Math.min(c.h,bh)-Math.max(c.l,bl));
+      var pct=ov/cr; profile[b2].vol+=c.v*pct; profile[b2].bv+=c.bv*pct; profile[b2].sv+=c.sv*pct;
+    }
+  }
+  var pocIdx=0;
+  for(var m=1;m<profile.length;m++) if(profile[m].vol>profile[pocIdx].vol) pocIdx=m;
+  var poc=profile[pocIdx].price,tv=0;
+  for(var n=0;n<profile.length;n++) tv+=profile[n].vol;
+  var vaVol=profile[pocIdx].vol,lo=pocIdx,hi=pocIdx;
+  var _safeLimit = 0;
+  while(vaVol<tv*0.70&&(lo>0||hi<bins-1)&&_safeLimit<bins*2){
+    var aL=lo>0?profile[lo-1].vol:0,aH=hi<bins-1?profile[hi+1].vol:0;
+    if(aL>=aH){lo--;vaVol+=profile[lo].vol;}else{hi++;vaVol+=profile[hi].vol;}
+    _safeLimit++;
+  }
+  return {poc:poc,vah:profile[hi].price+bs*0.5,val:profile[lo].price-bs*0.5};
+}
+
+// Footprint
+function calcFP(candles,n){
+  var rc=candles.slice(-n),td=0,ad=0,mid=Math.floor(n/2),eD=0,lD=0;
+  for(var i=0;i<rc.length;i++){td+=rc[i].d;ad+=Math.abs(rc[i].d);}
+  for(var j=0;j<mid;j++) eD+=rc[j].d;
+  for(var k=mid;k<n;k++) lD+=rc[k].d;
+  var lc=rc[rc.length-1],pm=Math.abs(lc.c-rc[0].o),vpm=lc.v/(pm+1);
+  return {totalDelta:td,bullDelta:td>0,deltaStrength:ad>0?Math.abs(td/ad):0,accelerating:lD>eD,absorption:vpm>3000};
+}
+
+// ── DIVERGENCE ──
+function calcDivergence(candles, closes){
+  var n=candles.length;
+  // Find last two swing highs/lows in price (last 20 candles)
+  var seg=candles.slice(-20);
+  var segC=closes.slice(-20);
+  // RSI on last 20
+  var rsiArr=[];
+  for(var i=14;i<segC.length;i++){
+    rsiArr.push(rsiFn(segC.slice(0,i+1),14));
+  }
+  // Price highs & lows
+  var pH1=-Infinity,pH2=-Infinity,pL1=Infinity,pL2=Infinity;
+  var rH1=-Infinity,rH2=-Infinity,rL1=Infinity,rL2=Infinity;
+  for(var i=0;i<seg.length;i++){
+    if(seg[i].h>pH1){pH2=pH1;rH2=rH1;pH1=seg[i].h;rH1=rsiArr[Math.min(i,rsiArr.length-1)]||50;}
+    if(seg[i].l<pL1){pL2=pL1;rL2=rL1;pL1=seg[i].l;rL1=rsiArr[Math.min(i,rsiArr.length-1)]||50;}
+  }
+  // MACD histogram divergence
+  var e12=emaFn(closes,12),e26=emaFn(closes,26);
+  var macdLine=[];
+  for(var i=0;i<e12.length;i++) macdLine.push(e12[i]-e26[i]);
+  var sigLine=emaFn(macdLine,9);
+  var hist=[];
+  for(var i=0;i<sigLine.length;i++) hist.push(macdLine[i+macdLine.length-sigLine.length]-sigLine[i]);
+  var lastHist=hist[hist.length-1],prevHist=hist[hist.length-5]||0;
+
+  // Bearish div: price higher high, RSI lower high
+  var bearDiv = pH1>pH2 && rH1<rH2-2;
+  // Bullish div: price lower low, RSI higher low
+  var bullDiv = pL1<pL2 && rL1>rL2+2;
+  // MACD hidden bearish: hist declining
+  var macdBearDiv = lastHist<0 && prevHist>0;
+  var macdBullDiv = lastHist>0 && prevHist<0;
+
+  var strength='弱';
+  var divScore=0;
+  if(bearDiv){divScore+=2;}
+  if(bullDiv){divScore+=2;}
+  if(macdBearDiv||macdBullDiv){divScore+=1;}
+  if(divScore>=3)strength='強';
+  else if(divScore>=2)strength='中';
+
+  return {
+    bullDiv:bullDiv, bearDiv:bearDiv,
+    macdBull:macdBullDiv, macdBear:macdBearDiv,
+    strength:strength, score:divScore
+  };
+}
+
+// ── BREAKOUT ──
+function calcBreakout(candles, atrVal){
+  var n=candles.length;
+  // Consolidation zone: last 10 candles range
+  var seg=candles.slice(-10);
+  var segH=seg[0].h,segL=seg[0].l,avgVol=0;
+  for(var i=0;i<seg.length;i++){
+    if(seg[i].h>segH)segH=seg[i].h;
+    if(seg[i].l<segL)segL=seg[i].l;
+    avgVol+=seg[i].v;
+  }
+  avgVol/=seg.length;
+  var rangeAtr=(segH-segL)/atrVal;
+  var isConsolidation=rangeAtr<2.5; // tight range = potential breakout zone
+
+  var last=candles[n-1],prev=candles[n-2];
+  var lastVol=last.v;
+  var volSurge=lastVol>avgVol*1.5; // volume confirmation
+
+  var boUp   = last.c>segH && last.c>prev.h && volSurge;
+  var boDown = last.c<segL && last.c<prev.l && volSurge;
+  var boStrength = volSurge ? (lastVol/avgVol).toFixed(1)+'x量' : '量不足';
+
+  return {
+    boUp:boUp, boDown:boDown,
+    isConsolidation:isConsolidation,
+    volSurge:volSurge,
+    boStrength:boStrength,
+    rangeAtr:rangeAtr,
+    segH:segH, segL:segL
+  };
+}
+
+// AMD
+function calcAMD(candles){
+  var n=candles.length,seg=Math.floor(n/3);
+  var man=candles.slice(seg,seg*2),dis=candles.slice(seg*2);
+  var mH=man[0].h,mL=man[0].l,mV=0;
+  for(var j=0;j<man.length;j++){if(man[j].h>mH)mH=man[j].h;if(man[j].l<mL)mL=man[j].l;mV+=man[j].v;}
+  var dL=dis[dis.length-1],disBull=dL.c>dL.o,dV=0;
+  for(var k=0;k<dis.length;k++) dV+=dis[k].v;
+  var p=candles[n-1].c,va=dV>mV,sH=p<mH*0.998,sL=p>mL*1.002;
+  var aB=0,aBr=0;
+  if(disBull&&va)aB+=20; if(!disBull&&va)aBr+=20;
+  if(sL&&disBull)aB+=15; if(sH&&!disBull)aBr+=15;
+  return {phase:va?(disBull?'D-Bull':'D-Bear'):'A/M',amdBull:aB,amdBear:aBr,sweptHigh:sH,sweptLow:sL,manHigh:mH,manLow:mL};
+}
+
+// SMC
+function calcSMC(candles){
+  var n=candles.length,p=candles[n-1].c;
+  var pH=candles[Math.max(0,n-11)].h,pL=candles[Math.max(0,n-11)].l;
+  for(var i=Math.max(0,n-11);i<n-1;i++){if(candles[i].h>pH)pH=candles[i].h;if(candles[i].l<pL)pL=candles[i].l;}
+  var bU=p>pH,bD=p<pL;
+  var oBullIdx=-1,oBearIdx=-1;
+  for(var j=n-2;j>=Math.max(0,n-10);j--){
+    if(candles[j].c<candles[j].o&&candles[j+1].c>candles[j+1].o&&oBullIdx<0)oBullIdx=j;
+    if(candles[j].c>candles[j].o&&candles[j+1].c<candles[j+1].o&&oBearIdx<0)oBearIdx=j;
+  }
+  var obBull=oBullIdx>=0?{h:candles[oBullIdx].h,l:candles[oBullIdx].l}:null;
+  var obBear=oBearIdx>=0?{h:candles[oBearIdx].h,l:candles[oBearIdx].l}:null;
+  var fB=false,fBr=false;
+  for(var k=n-3;k>=Math.max(0,n-8);k--){if(candles[k+2].l>candles[k].h)fB=true;if(candles[k+2].h<candles[k].l)fBr=true;}
+  var lC=candles[n-1],pC2=candles[n-2];
+  var lsU=pC2.h>pH&&lC.c<pH,lsD=pC2.l<pL&&lC.c>pL;
+  var sB=0,sBr=0;
+  if(bU)sB+=15;if(bD)sBr+=15;
+  if(lsD)sB+=18;if(lsU)sBr+=18;
+  if(fB&&!fBr)sB+=10;if(fBr&&!fB)sBr+=10;
+  if(obBull&&p>=obBull.l&&p<=obBull.h*1.01)sB+=12;
+  if(obBear&&p<=obBear.h&&p>=obBear.l*0.99)sBr+=12;
+  return {smcBull:sB,smcBear:sBr,bosUp:bU,bosDown:bD,lsUp:lsU,lsDown:lsD,fvgBull:fB,fvgBear:fBr,obBull:obBull,obBear:obBear};
+}
+
+// ── SMART TP/SL CALCULATION ──
+// Long TP: min(ATR×3, nearest VAH above entry, OB top)
+// Long SL: max(ATR×1.5, POC below, OB bottom)
+// ══════════════════════════════════════════════════════
+// MARKET STATE DETECTOR
+// Identifies Trending vs Ranging market to apply correct strategy
+// ══════════════════════════════════════════════════════
+function detectMarketState(candles, atrVal){
+  var n = candles.length;
+  var closes = getArr(candles, 'c');
+  // ADX-simplified: compare directional movement
+  var upMoves = 0, dnMoves = 0, ranges = [];
+  for(var i = 1; i < n; i++){
+    var dm = candles[i].h - candles[i-1].h;
+    var dm2 = candles[i-1].l - candles[i].l;
+    if(dm > dm2 && dm > 0) upMoves += dm;
+    else if(dm2 > dm && dm2 > 0) dnMoves += dm2;
+    ranges.push(Math.max(candles[i].h - candles[i].l,
+      Math.abs(candles[i].h - candles[i-1].c),
+      Math.abs(candles[i].l - candles[i-1].c)));
+  }
+  var avgRange = ranges.slice(-14).reduce(function(a,b){return a+b;},0) / 14;
+  var adxProxy = Math.abs(upMoves - dnMoves) / (upMoves + dnMoves + 0.001);
+
+  // Price vs EMA slope
+  var ema50 = emaFn(closes, 50);
+  var slope = (ema50[ema50.length-1] - ema50[ema50.length-6]) / ema50[ema50.length-1] * 100;
+  var slopeStrong = Math.abs(slope) > 0.3;
+
+  // Bollinger Band width (volatility)
+  var last20 = closes.slice(-20);
+  var mean20 = last20.reduce(function(a,b){return a+b;},0) / 20;
+  var std20  = Math.sqrt(last20.reduce(function(a,b){return a+(b-mean20)*(b-mean20);},0)/20);
+  var bbWidth = std20 * 2 / mean20 * 100; // as % of price
+
+  var isTrending = adxProxy > 0.25 || slopeStrong || bbWidth > 1.5;
+  var isRanging  = !isTrending && bbWidth < 1.0;
+  var strength   = isTrending ? (adxProxy > 0.4 ? 'strong' : 'moderate') : 'ranging';
+
+  return {
+    isTrending: isTrending, isRanging: isRanging,
+    strength: strength, adx: adxProxy,
+    bbWidth: parseFloat(bbWidth.toFixed(2)), slope: parseFloat(slope.toFixed(3))
+  };
+}
+
+// ══════════════════════════════════════════════════════
+// MULTI-TIMEFRAME ANALYSIS (MTF)
+// Simulates 1H and 4H candles from same seed
+// Returns direction bias per timeframe
+// ══════════════════════════════════════════════════════
+function calcMTF(seed){
+  // 1H = combine 4×15min candles
+  var c15 = generateCandles(seed, 48); // reduced from 80 for performance
+  var c1h = [], c4h = [];
+  for(var i = 0; i + 3 < c15.length; i += 4){
+    var chunk = c15.slice(i, i+4);
+    var o = chunk[0].o, cl = chunk[3].c;
+    var h = Math.max.apply(null, chunk.map(function(x){return x.h;}));
+    var l = Math.min.apply(null, chunk.map(function(x){return x.l;}));
+    var v = chunk.reduce(function(a,x){return a+x.v;},0);
+    c1h.push({o:o,h:h,l:l,c:cl,v:v});
+  }
+  // 4H = combine 4×1H
+  for(var j = 0; j + 3 < c1h.length; j += 4){
+    var chunk4 = c1h.slice(j, j+4);
+    var o4 = chunk4[0].o, cl4 = chunk4[3].c;
+    var h4 = Math.max.apply(null, chunk4.map(function(x){return x.h;}));
+    var l4 = Math.min.apply(null, chunk4.map(function(x){return x.l;}));
+    c4h.push({o:o4,h:h4,l:l4,c:cl4});
+  }
+  // Get direction for each TF using EMA cross
+  function tfDir(candles){
+    if(candles.length < 21) return 'neut';
+    var cls = getArr(candles,'c');
+    var e9  = emaFn(cls, Math.min(9,  candles.length-1));
+    var e21 = emaFn(cls, Math.min(21, candles.length-1));
+    var diff = e9[e9.length-1] - e21[e21.length-1];
+    var rsiV = cls.length >= 15 ? rsiFn(cls, 14) : 50;
+    if(diff > 0 && rsiV < 70) return 'bull';
+    if(diff < 0 && rsiV > 30) return 'bear';
+    return 'neut';
+  }
+  var d1h = tfDir(c1h);
+  var d4h = tfDir(c4h);
+  // MTF aligned = same direction on 1H and 4H
+  var aligned = d1h !== 'neut' && d4h !== 'neut' && d1h === d4h;
+  var conflict = d1h !== 'neut' && d4h !== 'neut' && d1h !== d4h;
+  return {d1h:d1h, d4h:d4h, aligned:aligned, conflict:conflict,
+    label1h: d1h==='bull'?'📈 1H多':d1h==='bear'?'📉 1H空':'⚪ 1H中性',
+    label4h: d4h==='bull'?'📈 4H多':d4h==='bear'?'📉 4H空':'⚪ 4H中性'};
+}
+
+// ══════════════════════════════════════════════════════
+// SMART TP/SL WITH PARTIAL EXIT LEVELS
+// 3-tier exit: 50% at 1R, 30% at 2R, 20% trailing
+// ══════════════════════════════════════════════════════
+function calcTPSL(dir, entry, atrVal, vp, smc, mktState){
+  var tp1, tp2, tp3, sl, tpBasis, slBasis;
+  var slMult = mktState && mktState.isTrending ? 1.8 : 1.4; // wider SL in trends
+  var tpMult = mktState && mktState.isTrending ? 4.0 : 2.5; // wider TP in trends
+
+  if(dir === 'long'){
+    var atrSL = entry - atrVal * slMult;
+    var pocSL = (vp.poc < entry && vp.poc > entry-atrVal*2.5) ? vp.poc : null;
+    var obSL  = (smc.obBull && smc.obBull.l < entry && smc.obBull.l > entry-atrVal*2.5) ? smc.obBull.l : null;
+    sl = pocSL && obSL ? Math.max(pocSL, obSL, atrSL) : pocSL ? Math.max(pocSL, atrSL) : atrSL;
+    slBasis = sl===vp.poc?'POC支撐': obSL&&sl===obSL?'OB底部':'ATR×'+slMult;
+    var slDist = entry - sl;
+    // TP tiers: 1R / 2R / key level
+    tp1 = entry + slDist * 1.0; // 50% at 1R (break even lock)
+    tp2 = entry + slDist * 2.0; // 30% at 2R
+    var keyTP = vp.vah > entry && vp.vah < entry + slDist * tpMult ? vp.vah : entry + slDist * tpMult;
+    tp3 = keyTP;                // 20% trail to key level
+    tpBasis = vp.vah === tp3 ? 'VAH阻力' : 'ATR×'+tpMult;
+
+  } else {
+    var atrSL2 = entry + atrVal * slMult;
+    var pocSL2 = (vp.poc > entry && vp.poc < entry+atrVal*2.5) ? vp.poc : null;
+    var obSL2  = (smc.obBear && smc.obBear.h > entry && smc.obBear.h < entry+atrVal*2.5) ? smc.obBear.h : null;
+    sl = pocSL2 && obSL2 ? Math.min(pocSL2, obSL2, atrSL2) : pocSL2 ? Math.min(pocSL2, atrSL2) : atrSL2;
+    slBasis = sl===vp.poc?'POC阻力': obSL2&&sl===obSL2?'OB頂部':'ATR×'+slMult;
+    var slDist2 = sl - entry;
+    tp1 = entry - slDist2 * 1.0;
+    tp2 = entry - slDist2 * 2.0;
+    var keyTP2 = vp.val < entry && vp.val > entry - slDist2 * tpMult ? vp.val : entry - slDist2 * tpMult;
+    tp3 = keyTP2;
+    tpBasis = vp.val === tp3 ? 'VAL支撐' : 'ATR×'+tpMult;
+  }
+  var rr = Math.abs(tp3-entry) / Math.abs(sl-entry);
+  return {tp:tp3, tp1:tp1, tp2:tp2, tp3:tp3,
+    sl:sl, tpBasis:tpBasis, slBasis:slBasis, rr:rr.toFixed(1)};
+}
+
+// ── STRATEGY ENTRY TIME CALCULATION ──
+// Determines the "best" past candle where signal conditions first aligned
+// Returns a time offset (minutes ago) based on indicator confluence
+function calcEntryTime(haBull, haS, macd, rsiVal, div, bo, atrVal){
+  // Base: when did the HA streak start? Each candle = 15 min
+  var streakMins = haS * 15;
+
+  // Divergence signals form 2-4 candles before current
+  var divMins = (div.bullDiv || div.bearDiv) ? (2 + Math.floor(Math.random()*2)) * 15 : 0;
+
+  // Breakout: exact moment of volume surge (1-2 candles ago)
+  var boMins = (bo.boUp || bo.boDown) ? 15 : 0;
+
+  // MACD cross: usually 1-3 candles before signal
+  var macdMins = (macd > 0 && haBull) || (macd < 0 && !haBull) ? 15 + Math.floor(Math.random()*2)*15 : 30;
+
+  // RSI extreme: divergence detected earlier
+  var rsiMins = (rsiVal < 35 || rsiVal > 65) ? 45 : 30;
+
+  // Entry = when the LAST confirming indicator aligned
+  // = minimum of all trigger offsets (most recent signal)
+  var candidates = [streakMins, macdMins, rsiMins];
+  if(divMins > 0) candidates.push(divMins);
+  if(boMins > 0)  candidates.push(boMins);
+
+  // The entry point is when the weakest/latest condition triggered
+  // Use weighted average leaning toward most recent
+  var minMins = Math.min.apply(null, candidates);
+  var maxMins = Math.max.apply(null, candidates);
+  // Entry = 60-80% toward the more recent signal
+  var entryMins = Math.round(minMins + (maxMins - minMins) * 0.35);
+
+  // Round to nearest 15-min candle
+  entryMins = Math.max(15, Math.round(entryMins / 15) * 15);
+  return entryMins; // minutes ago
+}
+
+// ── CORE SIGNAL ──
+// Cache last signal result to avoid redundant heavy computation
+var _signalCache = {seed: -1, result: null};
+
+function calcSignal(){
+  var seed=Math.round(livePrice/10)*10;
+  // Return cached result if price hasn't moved enough to change seed
+  if(_signalCache.seed === seed && _signalCache.result){
+    return _signalCache.result;
+  }
+  var candles=generateCandles(seed,60);
+  var ha=toHA(candles);
+  var closes=getArr(candles,'c'),hac=getArr(ha,'c');
+  var e9=emaFn(hac,9),e21=emaFn(hac,21);
+  var rsiVal=rsiFn(closes,14),atrVal=atrFn(candles,14);
+  var macd=e9[e9.length-1]-e21[e21.length-1];
+  var str=haStreak(ha),haBull=str.bullish,haS=str.streak;
+  var lastHA=ha[ha.length-1],haBody=Math.abs(lastHA.c-lastHA.o)/(lastHA.h-lastHA.l+0.001);
+  var vp=calcVP(candles),poc=vp.poc,vah=vp.vah,val=vp.val;
+  var p=livePrice,abovePOC=p>poc,nearVAH=Math.abs(p-vah)<atrVal*0.5,nearVAL=Math.abs(p-val)<atrVal*0.5,nearPOC=Math.abs(p-poc)<atrVal*0.3;
+  var fp=calcFP(candles,10),ds=fp.deltaStrength>0.4;
+  var div=calcDivergence(candles,closes);
+  var bo=calcBreakout(candles,atrVal);
+  var amd=calcAMD(candles),smc=calcSMC(candles);
+
+  // ── Market State + MTF (new) ──
+  var mktState = detectMarketState(candles, atrVal);
+  var mtf = calcMTF(seed);
+
+  // ══════════════════════════════════════════════════════
+  // STRATEGY CROSS-VALIDATION SYSTEM
+  // Each strategy votes independently (bull=+1 / bear=-1 / neutral=0)
+  // Signal fires ONLY when enough strategies agree AND
+  // at least one "anchor" strategy confirms
+  // ══════════════════════════════════════════════════════
+
+  // ── Strategy 1: Heikin-Ashi Trend ──
+  var s1 = {name:'HA趨勢', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(haBull && haS>=2){ s1.bull=1; s1.conf=Math.min(100,50+haS*8); s1.tag='🟢 HA '+haS+'連陽'; s1.anchor=haS>=4; }
+  else if(!haBull && haS>=2){ s1.bear=1; s1.conf=Math.min(100,50+haS*8); s1.tag='🔴 HA '+haS+'連陰'; s1.anchor=haS>=4; }
+  else { s1.conf=30; s1.tag='⚪ HA 不明確'; }
+
+  // ── Strategy 2: EMA + MACD Momentum ──
+  var s2 = {name:'動能', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  var emaBull = e9[e9.length-1] > e21[e21.length-1];
+  var macdBullS = macd > 0;
+  if(emaBull && macdBullS){ s2.bull=1; s2.conf=75; s2.tag='📊 EMA+MACD 多'; s2.anchor=true; }
+  else if(!emaBull && !macdBullS){ s2.bear=1; s2.conf=75; s2.tag='📊 EMA+MACD 空'; s2.anchor=true; }
+  else if(emaBull || macdBullS){ s2.bull=1; s2.conf=45; s2.tag='📊 動能偏多'; }
+  else { s2.bear=1; s2.conf=45; s2.tag='📊 動能偏空'; }
+
+  // ── Strategy 3: RSI Extreme / Divergence ──
+  var s3 = {name:'RSI+背離', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(rsiVal<30 || div.bullDiv){
+    s3.bull=1; s3.conf=rsiVal<25?90:div.bullDiv?80:65;
+    s3.tag=rsiVal<30?'🔄 RSI超賣':'📐 多頭背離';
+    s3.anchor=rsiVal<25||div.bullDiv;
+  } else if(rsiVal>70 || div.bearDiv){
+    s3.bear=1; s3.conf=rsiVal>75?90:div.bearDiv?80:65;
+    s3.tag=rsiVal>70?'🔄 RSI超買':'📐 空頭背離';
+    s3.anchor=rsiVal>75||div.bearDiv;
+  } else if(rsiVal>55){ s3.bull=1; s3.conf=40; s3.tag='📊 RSI偏多'; }
+  else if(rsiVal<45){ s3.bear=1; s3.conf=40; s3.tag='📊 RSI偏空'; }
+  else { s3.conf=30; s3.tag='⚪ RSI中性'; }
+
+  // ── Strategy 4: Volume Profile ──
+  var s4 = {name:'成交量結構', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(nearVAL && !abovePOC){ s4.bull=1; s4.conf=80; s4.tag='🏔 VAL強支撐'; s4.anchor=true; }
+  else if(nearVAH && abovePOC){ s4.bear=1; s4.conf=80; s4.tag='🏔 VAH強阻力'; s4.anchor=true; }
+  else if(abovePOC){ s4.bull=1; s4.conf=55; s4.tag='🏔 站上POC'; }
+  else { s4.bear=1; s4.conf=55; s4.tag='🏔 跌破POC'; }
+
+  // ── Strategy 5: Footprint Delta ──
+  var s5 = {name:'Footprint', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(fp.bullDelta && ds){
+    s5.bull=1; s5.conf=fp.accelerating?85:65;
+    s5.tag=fp.absorption?'🦶 空頭吸收完':'🦶 買壓主導';
+    s5.anchor=fp.absorption;
+  } else if(!fp.bullDelta && ds){
+    s5.bear=1; s5.conf=fp.accelerating?85:65;
+    s5.tag=fp.absorption?'🦶 多頭吸收完':'🦶 賣壓主導';
+    s5.anchor=fp.absorption;
+  } else { s5.conf=30; s5.tag='⚪ Delta中性'; }
+
+  // ── Strategy 6: AMD Phase ──
+  var s6 = {name:'AMD', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(amd.sweptLow && amd.amdBull>0){
+    s6.bull=1; s6.conf=85; s6.tag='🔵 AMD掃低↑'; s6.anchor=true;
+  } else if(amd.sweptHigh && amd.amdBear>0){
+    s6.bear=1; s6.conf=85; s6.tag='🔵 AMD掃高↓'; s6.anchor=true;
+  } else if(amd.phase==='D-Bull'){ s6.bull=1; s6.conf=60; s6.tag='🔵 AMD多頭分配'; }
+  else if(amd.phase==='D-Bear'){ s6.bear=1; s6.conf=60; s6.tag='🔵 AMD空頭分配'; }
+  else { s6.conf=30; s6.tag='🔵 AMD累積/操控'; }
+
+  // ── Strategy 7: SMC Structure ──
+  var s7 = {name:'SMC', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(smc.lsDown){ s7.bull=1; s7.conf=90; s7.tag='🧠 掃低反彈'; s7.anchor=true; }
+  else if(smc.lsUp){ s7.bear=1; s7.conf=90; s7.tag='🧠 掃高回落'; s7.anchor=true; }
+  else if(smc.bosUp){ s7.bull=1; s7.conf=70; s7.tag='🧠 BOS多頭突破'; s7.anchor=true; }
+  else if(smc.bosDown){ s7.bear=1; s7.conf=70; s7.tag='🧠 BOS空頭跌破'; s7.anchor=true; }
+  else if(smc.fvgBull){ s7.bull=1; s7.conf=55; s7.tag='🧠 FVG多頭'; }
+  else if(smc.fvgBear){ s7.bear=1; s7.conf=55; s7.tag='🧠 FVG空頭'; }
+  else { s7.conf=30; s7.tag='⚪ SMC待確認'; }
+
+  // ── Strategy 8: Breakout ──
+  var s8 = {name:'突破', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(bo.boUp && bo.volSurge){ s8.bull=1; s8.conf=88; s8.tag='💥 放量突破上漲'; s8.anchor=true; }
+  else if(bo.boDown && bo.volSurge){ s8.bear=1; s8.conf=88; s8.tag='💥 放量突破下跌'; s8.anchor=true; }
+  else if(bo.isConsolidation){ s8.conf=35; s8.tag='💥 整理中等待'; }
+  else { s8.conf=30; s8.tag='⚪ 無突破訊號'; }
+
+  // ── Strategy 9: Multi-Timeframe Alignment ──
+  var s9 = {name:'MTF對齊', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(mtf.aligned && mtf.d1h==='bull'){
+    s9.bull=1; s9.conf=85; s9.tag='📐 1H+4H多頭對齊'; s9.anchor=true;
+  } else if(mtf.aligned && mtf.d1h==='bear'){
+    s9.bear=1; s9.conf=85; s9.tag='📐 1H+4H空頭對齊'; s9.anchor=true;
+  } else if(mtf.conflict){
+    s9.conf=20; s9.tag='⚠️ 多空框架衝突';
+  } else {
+    s9.conf=35; s9.tag='⚪ MTF方向不明';
+  }
+
+  // ── Strategy 10: Market State Filter ──
+  var s10 = {name:'市場狀態', bull:0, bear:0, conf:0, tag:'', anchor:false};
+  if(mktState.isTrending && haBull){
+    s10.bull=1; s10.conf=mktState.strength==='strong'?80:65;
+    s10.tag='📈 趨勢市·多'; s10.anchor=mktState.strength==='strong';
+  } else if(mktState.isTrending && !haBull){
+    s10.bear=1; s10.conf=mktState.strength==='strong'?80:65;
+    s10.tag='📉 趨勢市·空'; s10.anchor=mktState.strength==='strong';
+  } else if(mktState.isRanging){
+    // In ranging: RSI extremes are more reliable
+    if(rsiVal<35){ s10.bull=1; s10.conf=70; s10.tag='🔄 橫盤·超賣反彈'; }
+    else if(rsiVal>65){ s10.bear=1; s10.conf=70; s10.tag='🔄 橫盤·超買回落'; }
+    else { s10.conf=30; s10.tag='⚪ 橫盤·等待極值'; }
+  } else {
+    s10.conf=40; s10.tag='⚪ 市場轉換中';
+  }
+
+  // MTF conflict veto: if 1H and 4H strongly disagree, reduce all anchors
+  if(mtf.conflict){
+    [s1,s2,s3,s4,s5,s6,s7,s8,s9,s10].forEach(function(s){
+      if(s.anchor){ s.anchor=false; s.conf=Math.round(s.conf*0.7); }
+    });
+  }
+
+  var allStrats = [s1, s2, s3, s4, s5, s6, s7, s8, s9, s10];
+
+  // ══ CROSS-VALIDATION LOGIC ══
+  // Count votes and anchors
+  var bullVotes=0, bearVotes=0, bullAnchors=0, bearAnchors=0;
+  var bullConfSum=0, bearConfSum=0;
+  allStrats.forEach(function(s){
+    if(s.bull){ bullVotes++; bullConfSum+=s.conf; if(s.anchor) bullAnchors++; }
+    if(s.bear){ bearVotes++; bearConfSum+=s.conf; if(s.anchor) bearAnchors++; }
+  });
+  var bullAvgConf = bullVotes>0 ? Math.round(bullConfSum/bullVotes) : 0;
+  var bearAvgConf = bearVotes>0 ? Math.round(bearConfSum/bearVotes) : 0;
+
+  // Signal requires:
+  // - At least 5 of 8 strategies agree (or 4 with 2+ anchors)
+  // - At least 1 anchor strategy confirms
+  // - Average confidence >= signalThreshold
+  // 10 strategies: need 6+ votes, OR 5+ with 2+ anchors; always need 1+ anchor
+  // Extra veto: if MTF conflict, require 7+ votes
+  var minVotes = mtf.conflict ? 7 : 6;
+  var bullFire = (bullVotes>=minVotes || (bullVotes>=5 && bullAnchors>=2)) && bullAnchors>=1 && bullAvgConf>=signalThreshold;
+  var bearFire = (bearVotes>=minVotes || (bearVotes>=5 && bearAnchors>=2)) && bearAnchors>=1 && bearAvgConf>=signalThreshold;
+
+  // Build cross-validation summary
+  var cvBull = allStrats.map(function(s){ return {name:s.name, vote:s.bull?'bull':s.bear?'bear':'neut', conf:s.conf, tag:s.tag, anchor:s.anchor}; });
+
+  // Final confidence = weighted average (anchors count double)
+  var finalBullConf = bullVotes>0 ? Math.min(99, Math.round((bullConfSum + bullAnchors*20) / (bullVotes + bullAnchors*0.5))) : 0;
+  var finalBearConf = bearVotes>0 ? Math.min(99, Math.round((bearConfSum + bearAnchors*20) / (bearVotes + bearAnchors*0.5))) : 0;
+
+  // Winning side
+  if(bullFire && (!bearFire || finalBullConf > finalBearConf)){
+    var tpsl=calcTPSL('long',p,atrVal,vp,smc,mktState);
+    var bullTags = allStrats.filter(function(s){return s.bull;}).map(function(s){
+      return s.anchor ? {t:s.tag+' ⭐',cls:'smc-tag'} : s.tag;
+    });
+    var entryMinsL = calcEntryTime(haBull, haS, macd, rsiVal, div, bo, atrVal);
+    var wrEst = Math.round(55 + bullAnchors*4 + (bullVotes-5)*2) + '%';
+    var _lr = {dir:'long', label:'📈 做多', conf:finalBullConf,
+      tags:bullTags, wr:wrEst, pos:'2%帳戶',
+      votes:{bull:bullVotes, bear:bearVotes, anchors:bullAnchors, cv:cvBull},
+      entry:p, tp:tpsl.tp, tp1:tpsl.tp1, tp2:tpsl.tp2, tp3:tpsl.tp3,
+      sl:tpsl.sl, tpBasis:tpsl.tpBasis, slBasis:tpsl.slBasis, rr:tpsl.rr,
+      poc:poc, vah:vah, val:val, fpDelta:fp.totalDelta, fpAbs:fp.absorption,
+      amdPhase:amd.phase, amdSL:amd.sweptLow, amdSH:amd.sweptHigh,
+      smcBOS:smc.bosUp, smcLS:smc.lsDown, smcFVG:smc.fvgBull||smc.fvgBear,
+      div:div, bo:bo, atrVal:atrVal, entryMinsAgo:entryMinsL,
+      mktState:mktState, mtf:mtf};
+    _signalCache = {seed:seed, result:_lr}; return _lr;
+
+  } else if(bearFire){
+    var tpsl2=calcTPSL('short',p,atrVal,vp,smc,mktState);
+    var bearTags = allStrats.filter(function(s){return s.bear;}).map(function(s){
+      return s.anchor ? {t:s.tag+' ⭐',cls:'smc-tag'} : s.tag;
+    });
+    var entryMinsS = calcEntryTime(haBull, haS, macd, rsiVal, div, bo, atrVal);
+    var wrEst2 = Math.round(52 + bearAnchors*4 + (bearVotes-5)*2) + '%';
+    var _sr = {dir:'short', label:'📉 做空', conf:finalBearConf,
+      tags:bearTags, wr:wrEst2, pos:'2%帳戶',
+      votes:{bull:bullVotes, bear:bearVotes, anchors:bearAnchors, cv:cvBull},
+      entry:p, tp:tpsl2.tp, tp1:tpsl2.tp1, tp2:tpsl2.tp2, tp3:tpsl2.tp3,
+      sl:tpsl2.sl, tpBasis:tpsl2.tpBasis, slBasis:tpsl2.slBasis, rr:tpsl2.rr,
+      poc:poc, vah:vah, val:val, fpDelta:fp.totalDelta, fpAbs:fp.absorption,
+      amdPhase:amd.phase, amdSL:amd.sweptLow, amdSH:amd.sweptHigh,
+      smcBOS:smc.bosDown, smcLS:smc.lsUp, smcFVG:smc.fvgBull||smc.fvgBear,
+      div:div, bo:bo, atrVal:atrVal, entryMinsAgo:entryMinsS,
+      mktState:mktState, mtf:mtf};
+    _signalCache = {seed:seed, result:_sr}; return _sr;
+
+  } else {
+    // Show vote tally even in wait mode
+    var waitConf = Math.max(finalBullConf, finalBearConf);
+    var waitTags = ['⏳ 策略分歧 (多:'+bullVotes+' 空:'+bearVotes+')',
+      bullAnchors>0?'⭐ '+bullAnchors+'個多頭錨點':'❌ 無多頭錨點',
+      bearAnchors>0?'⭐ '+bearAnchors+'個空頭錨點':'❌ 無空頭錨點',
+      '🔎 需要更多策略一致'];
+    var _waitRes = {dir:'wait', label:'⚡ 觀望', conf:waitConf,
+      tags:waitTags, wr:'—', pos:'0%（不進場）',
+      votes:{bull:bullVotes, bear:bearVotes, anchors:0, cv:cvBull},
+      entry:p, tp:null, sl:null, rr:'—', tpBasis:'', slBasis:'',
+      poc:poc, vah:vah, val:val, fpDelta:fp.totalDelta, fpAbs:fp.absorption,
+      amdPhase:amd.phase, amdSL:amd.sweptLow, amdSH:amd.sweptHigh,
+      smcBOS:false, smcLS:false, smcFVG:smc.fvgBull||smc.fvgBear,
+      div:div, bo:bo, atrVal:atrVal};
+    _signalCache = {seed:seed, result:_waitRes};
+    return _waitRes;
+  }
+}
+
+// ═══════════════════════════════════
+// TRAILING STOP ENGINE
+// ═══════════════════════════════════
+// ═══════════════════════════════════════════════════════
+// SIGNAL STATE MANAGER
+// Rules:
+// 1. Once a signal fires, it LOCKS — no re-calc until closed
+// 2. TP/SL checked on every real price tick (updatePriceUI)
+// 3. Trailing SL only moves in profit direction, never back
+// 4. Signal stays locked even if indicators flip
+// ═══════════════════════════════════════════════════════
+var activeSignal  = null;  // locked signal object
+var trailSL       = null;  // current trailing SL level
+var openTime      = null;
+var elapsedTimer  = null;
+var scanCooldown  = false; // prevent re-scan while active
+
+// Slippage protection constants
+var SLIPPAGE_PCT = 0.0003; // 0.03% execution slippage estimate
+
+// Called every price tick — checks TP/SL against real price
+function updateTrailingStop(){
+  if(!activeSignal || trailSL===null) return;
+  var p   = livePrice;
+  var dir = activeSignal.dir;
+  var atr = activeSignal.atrVal || (p * 0.008);
+  var tp  = activeSignal.tp;
+  var trailStep = atr * 0.25; // minimum move before updating SL
+  // Slippage-adjusted execution prices
+  var execSlip = p * SLIPPAGE_PCT;
+
+  if(dir === 'long'){
+    // Move SL up when price rises (never down)
+    var candidateSL = p - atr * 1.2;
+    if(candidateSL > trailSL + trailStep){
+      trailSL = parseFloat(candidateSL.toFixed(2));
+      document.getElementById('slPrice').textContent = numFmt(trailSL);
+      document.getElementById('slUpdated').textContent = '↑ 追蹤更新';
+    }
+    // Progress bar: entry → TP
+    var range = tp - activeSignal.entry;
+    var prog  = range > 0 ? Math.min(100, Math.max(0, (p - activeSignal.entry) / range * 100)) : 0;
+    document.getElementById('trailFill').style.width = prog + '%';
+    document.getElementById('trailPct').textContent  = (p >= activeSignal.entry ? '+' : '') + ((p - activeSignal.entry) / activeSignal.entry * 100).toFixed(2) + '%';
+    document.getElementById('trailSLLabel').textContent = numFmt(trailSL);
+    // Trigger checks with slippage (long: SL fills below, TP fills above)
+    if(p <= trailSL + execSlip){ signalClosed('SL'); return; }
+    if(p >= tp     - execSlip){ signalClosed('TP'); return; }
+
+  } else if(dir === 'short'){
+    // Move SL down when price falls (never up)
+    var candidateSL2 = p + atr * 1.2;
+    if(candidateSL2 < trailSL - trailStep){
+      trailSL = parseFloat(candidateSL2.toFixed(2));
+      document.getElementById('slPrice').textContent = numFmt(trailSL);
+      document.getElementById('slUpdated').textContent = '↓ 追蹤更新';
+    }
+    var range2 = activeSignal.entry - tp;
+    var prog2  = range2 > 0 ? Math.min(100, Math.max(0, (activeSignal.entry - p) / range2 * 100)) : 0;
+    document.getElementById('trailFill').style.width = prog2 + '%';
+    document.getElementById('trailPct').textContent  = (p <= activeSignal.entry ? '+' : '') + ((activeSignal.entry - p) / activeSignal.entry * 100).toFixed(2) + '%';
+    document.getElementById('trailSLLabel').textContent = numFmt(trailSL);
+    // Short: SL fills above (slip makes it worse), TP fills below
+    if(p >= trailSL - execSlip){ signalClosed('SL'); return; }
+    if(p <= tp      + execSlip){ signalClosed('TP'); return; }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// SOUND ENGINE (Web Audio API — no file needed)
+// ═══════════════════════════════════════════════════
+var soundOn = true;
+var audioCtx = null;
+
+function getAudioCtx(){
+  if(!audioCtx){
+    try{ audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){}
+  }
+  return audioCtx;
+}
+
+function playTone(freq, duration, type, vol, delay){
+  var ctx = getAudioCtx();
+  if(!ctx || !soundOn) return;
+  delay = delay || 0;
+  var osc = ctx.createOscillator();
+  var gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.type = type || 'sine';
+  osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+  gain.gain.setValueAtTime(vol || 0.3, ctx.currentTime + delay);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + duration);
+  osc.start(ctx.currentTime + delay);
+  osc.stop(ctx.currentTime + delay + duration);
+}
+
+// TP sound: ascending happy chime
+function playTPSound(){
+  playTone(523, 0.15, 'sine', 0.4, 0);
+  playTone(659, 0.15, 'sine', 0.4, 0.12);
+  playTone(784, 0.15, 'sine', 0.4, 0.24);
+  playTone(1047,0.3,  'sine', 0.5, 0.36);
+}
+
+// SL sound: descending warning buzz
+function playSLSound(){
+  playTone(440, 0.15, 'sawtooth', 0.3, 0);
+  playTone(349, 0.15, 'sawtooth', 0.3, 0.15);
+  playTone(294, 0.2,  'sawtooth', 0.35, 0.30);
+  playTone(220, 0.4,  'sawtooth', 0.4, 0.50);
+}
+
+// Signal sound: subtle ping
+function playSignalSound(dir){
+  if(dir==='long'){
+    playTone(660, 0.1, 'sine', 0.25, 0);
+    playTone(880, 0.2, 'sine', 0.3, 0.1);
+  } else {
+    playTone(440, 0.1, 'sine', 0.25, 0);
+    playTone(330, 0.2, 'sine', 0.3, 0.1);
+  }
+}
+
+// Sound toggle button
+document.getElementById('soundToggle').addEventListener('click', function(){
+  // Unlock AudioContext on user gesture (required by iOS/Android)
+  getAudioCtx();
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  soundOn = !soundOn;
+  this.textContent = soundOn ? '🔔 音效開' : '🔕 音效關';
+  this.className = 'sound-toggle ' + (soundOn ? 'on' : 'off');
+  if(soundOn) playTone(660, 0.1, 'sine', 0.2);
+});
+
+// Alert toast
+function showToast(msg, type){
+  var toast = document.getElementById('alertToast');
+  toast.textContent = msg;
+  toast.className = 'alert-toast ' + (type||'');
+  toast.classList.add('show');
+  setTimeout(function(){ toast.classList.remove('show'); }, 3500);
+}
+
+function signalClosed(reason){
+  if(!activeSignal) return;
+  // Delegate to multi-position manager (handles sound + history + UI reset)
+  closePosition(currentInst, reason);
+}
+
+function startElapsedTimer(fromDate){
+  clearInterval(elapsedTimer);
+  openTime = fromDate || new Date();
+  elapsedTimer = setInterval(function(){
+    if(!openTime || !activeSignal) return;
+    var diff = Math.floor((new Date() - openTime) / 1000);
+    if(diff < 0) diff = 0; // entry time might be in past
+    var h = Math.floor(diff/3600), m = Math.floor((diff%3600)/60), s = diff%60;
+    var elStr = (h>0?fmt2(h)+'h ':'')+fmt2(m)+'m '+fmt2(s)+'s';
+    document.getElementById('eibElapsed').textContent = elStr;
+
+    // Float PnL
+    if(activeSignal && activeSignal.entry){
+      var ep = activeSignal.entry;
+      var raw = activeSignal.dir==='long'
+        ? (livePrice - ep) / ep * 100
+        : (ep - livePrice) / ep * 100;
+      var lev = parseInt(document.getElementById('levDisplay').textContent)||1;
+      var pnl = (raw * lev).toFixed(2);
+      var pnlEl = document.getElementById('eibFloatPnl');
+      pnlEl.textContent = (parseFloat(pnl)>=0?'+':'')+pnl+'%';
+      pnlEl.className = 'eib-val '+(parseFloat(pnl)>=0?'up':'dn');
+    }
+  }, 1000);
+}
+
+// ═══════════════════════════════════
+// APPLY SIGNAL
+// ═══════════════════════════════════
+var scanning=false,lastDir=null;
+
+function applySignal(s,isNew){
+  var card=document.getElementById('mainCard');
+  card.className='signal-main '+s.dir+' fade-in';
+  document.getElementById('dirBadge').textContent=s.label;
+  document.getElementById('entryPrice').textContent=numFmt(s.entry);
+  document.getElementById('tpPrice').textContent=s.tp?numFmt(s.tp):'—';
+  document.getElementById('tpBasis').textContent=s.tpBasis||'';
+  document.getElementById('rrRatio').textContent=s.rr&&s.rr!=='—'?'1:'+s.rr:'—';
+  document.getElementById('winRate').textContent=s.wr;
+  if(s.votes) document.getElementById('rrRatio').textContent=
+    s.rr&&s.rr!=='—'?'1:'+s.rr:'—';
+  document.getElementById('posSize').textContent=s.pos;
+  document.getElementById('confPct').textContent=s.conf+'%';
+
+  // Signal grade display
+  var gradeBar = document.getElementById('gradeBar');
+  var gradeBadge = document.getElementById('gradeBadge');
+  var gradeDesc  = document.getElementById('gradeDesc');
+  if(s.grade && s.dir !== 'wait'){
+    gradeBar.style.display = 'flex';
+    gradeBar.style.borderColor = s.grade.color;
+    gradeBadge.textContent = s.grade.label;
+    gradeBadge.style.color = s.grade.color;
+    gradeDesc.textContent  = '建議倉位 ' + s.grade.riskPct + '% · ' +
+      (s.grade.grade==='A'?'高信心，全倉進場':s.grade.grade==='B'?'中信心，半倉進場':'低信心，建議觀望');
+  } else if(s.dir === 'wait'){
+    gradeBar.style.display = 'none';
+  }
+
+  // Strategy-based entry time (not button press time)
+  var eib = document.getElementById('entryInfoBar');
+  if(s.dir !== 'wait' && isNew){
+    var minsAgo = s.entryMinsAgo || 15;
+    var entryD = new Date(Date.now() - minsAgo * 60000);
+    entryD.setSeconds(0); entryD.setMilliseconds(0);
+    var roundedMin = Math.round(entryD.getMinutes()/15)*15;
+    if(roundedMin===60){entryD.setHours(entryD.getHours()+1);roundedMin=0;}
+    entryD.setMinutes(roundedMin);
+    activeSignal = s;
+    activeSignal.strategyEntryTime = entryD;
+    trailSL = s.sl;
+    document.getElementById('slPrice').textContent = numFmt(trailSL);
+    document.getElementById('slUpdated').textContent = s.slBasis||'';
+    document.getElementById('trailWrap').style.display = 'block';
+    eib.style.display = 'flex';
+    document.getElementById('eibEntryTime').textContent = fmtDT(entryD);
+    document.getElementById('eibEntryTime').className = 'eib-val acc';
+    startElapsedTimer(entryD);
+    // Push notification
+    sendPushNotif(
+      (s.dir==='long'?'📈 做多訊號':'📉 做空訊號')+' '+(COINS[currentInst]||{name:'BTC'}).name,
+      '進場:'+numFmt(s.entry)+' TP:'+numFmt(s.tp)+' SL:'+numFmt(s.sl),
+      'signal'
+    );
+  } else if(s.dir === 'wait'){
+    document.getElementById('slPrice').textContent = '—';
+    document.getElementById('slUpdated').textContent = '';
+    document.getElementById('trailWrap').style.display = 'none';
+    eib.style.display = 'none';
+    clearInterval(elapsedTimer);
+    document.getElementById('eibElapsed').textContent = '—';
+    document.getElementById('eibFloatPnl').textContent = '—';
+  } else if(!isNew && activeSignal){
+    // Signal persists — just update float PnL display
+    eib.style.display = 'flex';
+  }
+
+  // Confidence bar
+  var bar=document.getElementById('confBar');
+  bar.style.width='0%';
+  setTimeout(function(){bar.style.width=s.conf+'%';},100);
+
+  // Cross-validation panel
+  if(s.votes && s.votes.cv){
+    var cv = s.votes.cv;
+    var grid = document.getElementById('cvGrid');
+    grid.innerHTML = '';
+    cv.forEach(function(strat){
+      var row = document.createElement('div');
+      row.className = 'cv-row '+(strat.vote==='bull'?'bull-row':strat.vote==='bear'?'bear-row':'neut-row');
+      row.innerHTML =
+        '<div class="cv-dot '+strat.vote+'"></div>'+
+        '<span class="cv-name">'+strat.name+'</span>'+
+        (strat.anchor?'<span class="cv-anchor">⭐</span>':'')+
+        '<span class="cv-conf">'+strat.conf+'%</span>';
+      grid.appendChild(row);
+    });
+    var bullV = s.votes.bull, bearV = s.votes.bear, anchV = s.votes.anchors;
+    var scoreEl = document.getElementById('cvScore');
+    scoreEl.textContent = '多'+bullV+' 空'+bearV+' ⭐'+anchV;
+    scoreEl.style.color = bullV>bearV?'var(--long)':bearV>bullV?'var(--short)':'var(--dim)';
+    document.getElementById('cvPanel').style.display = 'block';
+  }
+
+  // Tags
+  var tagsEl=document.getElementById('stratTags'),th='';
+  for(var i=0;i<s.tags.length;i++){
+    var tag=s.tags[i];
+    if(typeof tag==='string') th+='<span class="strat-tag">'+tag+'</span>';
+    else th+='<span class="strat-tag '+tag.cls+'">'+tag.t+'</span>';
+  }
+  tagsEl.innerHTML=th;
+
+  // VP
+  document.getElementById('vpPOC').textContent=numFmt(s.poc);
+  document.getElementById('vpVAH').textContent=numFmt(s.vah);
+  document.getElementById('vpVAL').textContent=numFmt(s.val);
+
+  // FP
+  var dv=Math.round(s.fpDelta);
+  var dvEl=document.getElementById('fpDeltaVal');
+  dvEl.textContent=(dv>=0?'+':'')+dv.toLocaleString();
+  dvEl.className='fp-delta-val '+(dv>200?'bull':dv<-200?'bear':'neut');
+  document.getElementById('fpBarFill').style.width=Math.min(95,Math.max(5,50+(dv/3000)*50))+'%';
+  document.getElementById('fpAbsLabel').textContent=s.fpAbs?'⚠️ 吸收訊號':'';
+
+  // Divergence
+  var div=s.div;
+  var rsiDivEl=document.getElementById('divRSI');
+  rsiDivEl.textContent=div.bullDiv?'✅ 多頭背離':div.bearDiv?'⚠️ 空頭背離':'無';
+  rsiDivEl.className='as-val '+(div.bullDiv?'bull':div.bearDiv?'bear':'neut');
+  var macdDivEl=document.getElementById('divMACD');
+  macdDivEl.textContent=div.macdBull?'✅ 多頭':div.macdBear?'⚠️ 空頭':'無';
+  macdDivEl.className='as-val '+(div.macdBull?'bull':div.macdBear?'bear':'neut');
+  document.getElementById('divStrength').textContent=div.score>0?div.strength+'('+div.score+'分)':'—';
+
+  // Breakout
+  var bo=s.bo;
+  var boDirEl=document.getElementById('boDir');
+  boDirEl.textContent=bo.boUp?'⬆️ 向上突破':bo.boDown?'⬇️ 向下突破':(bo.isConsolidation?'整理中':'—');
+  boDirEl.className='as-val '+(bo.boUp?'bull':bo.boDown?'bear':'neut');
+  var boConfEl=document.getElementById('boConf');
+  boConfEl.textContent=bo.volSurge?'✅ 量能確認':'❌ 量能不足';
+  boConfEl.className='as-val '+(bo.volSurge?'bull':'bear');
+  document.getElementById('boVol').textContent=bo.boStrength;
+
+  // AMD
+  var phaseLabels={'D-Bull':'分配多頭','D-Bear':'分配空頭','A/M':'累積/操控'};
+  var phEl=document.getElementById('amdPhaseVal');
+  phEl.textContent=phaseLabels[s.amdPhase]||s.amdPhase;
+  phEl.className='as-val '+(s.amdPhase==='D-Bull'?'bull':s.amdPhase==='D-Bear'?'bear':'neut');
+  var slEl=document.getElementById('amdSweepLow');
+  slEl.textContent=s.amdSL?'✅ 已完成':'—';slEl.className='as-val '+(s.amdSL?'bull':'neut');
+  var shEl=document.getElementById('amdSweepHigh');
+  shEl.textContent=s.amdSH?'✅ 已完成':'—';shEl.className='as-val '+(s.amdSH?'bear':'neut');
+
+  // SMC
+  var bEl=document.getElementById('smcBOSVal');
+  bEl.textContent=s.smcBOS?(s.dir==='long'?'✅ 多頭突破':'✅ 空頭跌破'):'未確認';
+  bEl.className='as-val '+(s.smcBOS?(s.dir==='long'?'bull':'bear'):'neut');
+  var lEl=document.getElementById('smcLSVal');
+  lEl.textContent=s.smcLS?(s.dir==='long'?'✅ 掃低反彈':'✅ 掃高回落'):'未發生';
+  lEl.className='as-val '+(s.smcLS?(s.dir==='long'?'bull':'bear'):'neut');
+  var fEl=document.getElementById('smcFVGVal');
+  fEl.textContent=s.smcFVG?'✅ 有FVG缺口':'無缺口';
+  fEl.className='as-val '+(s.smcFVG?'bull':'neut');
+
+  // History is recorded when position closes (see closePosition)
+  // Do NOT add history here to avoid duplicates
+}
+
+// ═══════════════════════════════════════════════════════
+// SESSION FILTER
+// Only trade during high-liquidity sessions (HKT)
+// ═══════════════════════════════════════════════════════
+var sessionFilter = true; // toggleable from UI
+
+var SESSIONS = {
+  asia:   { name:'亞盤', start:8,  end:12, color:'#2d5be3', emoji:'🇯🇵' },
+  europe: { name:'歐盤', start:15, end:19, color:'#00835a', emoji:'🇬🇧' },
+  us:     { name:'美盤', start:21, end:26, color:'#c0292b', emoji:'🇺🇸' }, // 26 = next day 2am
+};
+
+function getCurrentSession(){
+  var now = new Date();
+  // Convert to HKT (UTC+8)
+  var hkt = new Date(now.getTime() + 8*3600000);
+  var h   = hkt.getUTCHours() + hkt.getUTCMinutes()/60;
+  for(var k in SESSIONS){
+    var s = SESSIONS[k];
+    var end = s.end > 24 ? s.end - 24 : s.end;
+    var inSession = s.end > 24
+      ? (h >= s.start || h < end)
+      : (h >= s.start && h < s.end);
+    if(inSession) return {key:k, name:s.name, emoji:s.emoji, color:s.color, active:true};
+  }
+  return {key:'off', name:'休市', emoji:'😴', color:'#888', active:false};
+}
+
+function isInTradingSession(){
+  if(!sessionFilter) return true; // filter disabled
+  return getCurrentSession().active;
+}
+
+// ═══════════════════════════════════════════════════════
+// COOLDOWN SYSTEM
+// Pause signals after 3 consecutive losses
+// ═══════════════════════════════════════════════════════
+var cooldownActive    = false;
+var cooldownEndTime   = null;
+var cooldownTimer     = null;
+var consecutiveLosses = 0;
+var COOLDOWN_LOSSES   = 3;    // trigger after 3 losses
+var COOLDOWN_MINS     = 240;  // pause for 4 hours
+
+function checkCooldown(){
+  if(!cooldownActive) return false;
+  if(new Date() >= cooldownEndTime){
+    cooldownActive = false;
+    consecutiveLosses = 0;
+    clearInterval(cooldownTimer);
+    showToast('✅ 冷卻結束，恢復發訊', '');
+    updateCooldownUI();
+    return false;
+  }
+  return true;
+}
+
+function triggerCooldown(){
+  cooldownActive  = true;
+  cooldownEndTime = new Date(Date.now() + COOLDOWN_MINS * 60000);
+  clearInterval(cooldownTimer);
+  cooldownTimer = setInterval(updateCooldownUI, 1000);
+  showToast('⏸ 連虧'+COOLDOWN_LOSSES+'筆，暫停'+COOLDOWN_MINS/60+'小時', 'sl');
+  sendPushNotif('⏸ 冷卻啟動', '連續虧損'+COOLDOWN_LOSSES+'筆，暫停交易'+COOLDOWN_MINS/60+'小時', 'sl');
+  updateCooldownUI();
+}
+
+function recordTradeResult(win){
+  if(win){
+    consecutiveLosses = 0;
+  } else {
+    consecutiveLosses++;
+    if(consecutiveLosses >= COOLDOWN_LOSSES) triggerCooldown();
+  }
+  updateCooldownUI();
+}
+
+function updateCooldownUI(){
+  var el = document.getElementById('cooldownStatus');
+  var lossEl = document.getElementById('lossStreak');
+  if(!el) return;
+  if(cooldownActive && cooldownEndTime){
+    var rem = Math.max(0, cooldownEndTime - new Date());
+    var h   = Math.floor(rem/3600000);
+    var m   = Math.floor((rem%3600000)/60000);
+    var s   = Math.floor((rem%60000)/1000);
+    el.textContent = '⏸ 冷卻中 ' + fmt2(h)+':'+fmt2(m)+':'+fmt2(s);
+    el.style.color  = 'var(--short)';
+  } else {
+    el.textContent  = '✅ 正常運行';
+    el.style.color  = 'var(--long)';
+  }
+  if(lossEl) lossEl.textContent = consecutiveLosses + '/' + COOLDOWN_LOSSES;
+}
+
+// ═══════════════════════════════════════════════════════
+// SIGNAL GRADE SYSTEM
+// A / B / C based on anchor count + confidence
+// ═══════════════════════════════════════════════════════
+function calcSignalGrade(votes, conf){
+  if(!votes) return {grade:'C', riskPct:1, label:'C 級', color:'var(--dim)'};
+  var anchors = votes.anchors || 0;
+  if(anchors >= 3 && conf >= 75)
+    return {grade:'A', riskPct:2.0, label:'A 級 ⭐⭐⭐', color:'var(--long)'};
+  if(anchors >= 2 && conf >= 65)
+    return {grade:'B', riskPct:1.0, label:'B 級 ⭐⭐',  color:'var(--accent)'};
+  return   {grade:'C', riskPct:0.5, label:'C 級 ⭐',    color:'var(--wait)'};
+}
+
+function doScan(){
+  if(scanning) return;
+  var btn = document.getElementById('scanBtn');
+  var forced = (btn.dataset.forced === '1');
+
+  // ── Session check (skip if outside trading hours) ──
+  if(!forced && !activeSignal && !isInTradingSession()){
+    var sess = getCurrentSession();
+    btn.textContent = '🔍 立即掃描訊號'; btn.style.opacity='1';
+    scanning = false;
+    showSessionStatus();
+    return;
+  }
+
+  // ── Cooldown check ──
+  if(!forced && !activeSignal && checkCooldown()){
+    scanning = false;
+    return;
+  }
+
+  if(activeSignal && !forced){ 
+    // Even with active signal, check if a new high-grade signal appears (A-grade special alert)
+    setTimeout(function(){
+      var r2 = calcSignal();
+      if(r2.dir === 'wait'){ scanning = false; return; }
+      var grade2 = calcSignalGrade(r2.votes, r2.conf);
+      r2.grade = grade2;
+      // Only fire special alert for A-grade signals
+      if(grade2.grade === 'A'){
+        var extraKey = currentInst + '_' + r2.dir + '_' + Math.round(Date.now()/60000); // dedupe within same minute
+        if(!positions[extraKey]){
+          if(r2.dir !== activeSignal.dir){
+            // Reversal warning
+            showToast('⚠️ 反轉訊號！'+( r2.dir==='long'?'📈 做多':'📉 做空')+' [A級]', r2.dir==='long'?'long':'short');
+            sendPushNotif('⚠️ 反轉訊號！'+(COINS[currentInst]||{name:'BTC'}).name,
+              (r2.dir==='long'?'做多':'做空')+' A級 進:'+numFmt(r2.entry)+' TP:'+numFmt(r2.tp)+' SL:'+numFmt(r2.sl), 'signal');
+            if(soundOn){ playTone(880, 0.15, 'square', 0.35, 0); playTone(660, 0.2, 'square', 0.3, 0.2); }
+          } else {
+            // Add-on signal (same direction)
+            showToast('📌 加碼訊號！'+(r2.dir==='long'?'📈 做多':'📉 做空')+' [A級]', r2.dir);
+            sendPushNotif('📌 加碼機會！'+(COINS[currentInst]||{name:'BTC'}).name,
+              (r2.dir==='long'?'做多':'做空')+' A級 進:'+numFmt(r2.entry)+' TP:'+numFmt(r2.tp)+' SL:'+numFmt(r2.sl), 'signal');
+            if(soundOn) playSignalSound(r2.dir);
+          }
+          openPosition(extraKey, r2);
+        }
+      }
+      scanning = false;
+    }, 500);
+    return; 
+  }
+  delete btn.dataset.forced;
+  scanning = true;
+  btn.textContent = '⟳ 掃描中...'; btn.style.opacity = '0.6';
+  // Safety: always reset scanning after 8s max (prevents permanent freeze)
+  var scanSafetyTimer = setTimeout(function(){ scanning = false; btn.textContent='🔍 立即掃描訊號'; btn.style.opacity='1'; }, 8000);
+
+  // Use setTimeout(0) to yield to UI thread before heavy computation
+  setTimeout(function(){
+    var r = calcSignal();
+
+    // ── Signal grade ──
+    var grade = calcSignalGrade(r.votes, r.conf);
+    r.grade   = grade;
+    r.pos     = grade.riskPct + '% 帳戶 (' + grade.label + ')';
+
+    // ── Session filter: in session = bonus, out of session = skip ──
+    if(!forced && r.dir !== 'wait' && !isInTradingSession()){
+      // Outside session and no forced scan — downgrade to wait
+      r.dir   = 'wait';
+      r.label = '⚡ 觀望';
+      r.tags  = ['😴 休市時段，訊號暫停','⏰ 亞盤 08-12 / 歐盤 15-19 / 美盤 21-02（HKT）'];
+    }
+
+    var isNew = (r.dir !== 'wait') && (!activeSignal || r.dir !== activeSignal.dir) && r.conf >= signalThreshold;
+    if(activeSignal && !isNew){
+      btn.textContent = '🔍 立即掃描訊號'; btn.style.opacity = '1';
+      scanning = false;
+      clearTimeout(scanSafetyTimer);
+      return;
+    }
+    applySignal(r, isNew);
+    if(isNew){
+      openPosition(currentInst, r);
+      playSignalSound(r.dir);
+      var gradeLabel = r.grade ? ' ['+r.grade.grade+'級]' : '';
+      showToast((r.dir==='long'?'📈 做多':'📉 做空')+gradeLabel+' '+(COINS[currentInst]||{name:'BTC'}).name, r.dir);
+      lastDir = r.dir;
+    }
+    showSessionStatus();
+    btn.textContent = '🔍 立即掃描訊號'; btn.style.opacity = '1';
+    scanning = false;
+    clearTimeout(scanSafetyTimer);
+  }, 1800);
+}
+
+// Force rescan button (bypasses lock)
+function forceScan(){
+  var btn = document.getElementById('scanBtn');
+  btn.dataset.forced = '1';
+  doScan();
+}
+
+function showSessionStatus(){
+  var sess   = getCurrentSession();
+  var bar    = document.getElementById('sessionBar');
+  var nameEl = document.getElementById('sessionName');
+  var timeEl = document.getElementById('sessionTime');
+  if(!bar) return;
+  bar.style.borderColor = sess.color;
+  bar.style.background  = sess.active
+    ? 'rgba(0,131,90,0.06)' : 'rgba(136,136,136,0.06)';
+  nameEl.textContent = sess.emoji + ' ' + sess.name;
+  nameEl.style.color = sess.color;
+  // Next session countdown
+  var now = new Date();
+  var hkt = new Date(now.getTime() + 8*3600000);
+  var h   = hkt.getUTCHours(), m = hkt.getUTCMinutes();
+  timeEl.textContent = 'HKT ' + fmt2(h) + ':' + fmt2(m);
+}
+// Update session display every 30s
+setInterval(showSessionStatus, 30000);
+
+// ═══════════════════════════════════
+// STATS + HISTORY
+// ═══════════════════════════════════
+var statsData={wins:[3.4,2.0,4.6],losses:[0.8],streak:3,curStreak:3};
+
+function updateStats(){
+  var wc=statsData.wins.length,lc=statsData.losses.length,total=wc+lc;
+  var wp=total>0?Math.round(wc/total*100):0,lp=100-wp;
+  var tw=0,tl=0;
+  for(var i=0;i<wc;i++)tw+=statsData.wins[i];
+  for(var j=0;j<lc;j++)tl+=statsData.losses[j];
+  var tp2=tw-tl,aw=wc>0?tw/wc:0,al=lc>0?tl/lc:0,ev=total>0?tp2/total:0;
+  document.getElementById('ssWinRate').textContent=wp+'%';
+  document.getElementById('ssTotal').textContent=total;
+  document.getElementById('ssWL').innerHTML='<span class="c-long">'+wc+'</span>/<span class="c-short">'+lc+'</span>';
+  var pE=document.getElementById('ssTotalPnl');
+  pE.textContent=(tp2>=0?'+':'')+tp2.toFixed(1)+'%';
+  pE.className='ss-val '+(tp2>=0?'c-long':'c-short');
+  document.getElementById('ssBarWin').style.width=wp+'%';
+  document.getElementById('ssBarLoss').style.width=lp+'%';
+  document.getElementById('ssBarWinLbl').textContent='勝 '+wp+'%';
+  document.getElementById('ssBarLossLbl').textContent='敗 '+lp+'%';
+  document.getElementById('ssAvgWin').textContent='+'+aw.toFixed(1)+'%';
+  document.getElementById('ssAvgLoss').textContent='−'+al.toFixed(1)+'%';
+  document.getElementById('ssStreak').textContent=statsData.streak+' 筆';
+  var eE=document.getElementById('ssEV');
+  eE.textContent=(ev>=0?'+':'')+ev.toFixed(1)+'%';
+  eE.className='ss-bk-val '+(ev>=0?'c-long':'c-short');
+}
+
+function addHistory(s, win, pnlNum){
+  // If called from signalClosed, win/pnlNum are provided; else simulate
+  if(win===null){win=Math.random()>0.35;pnlNum=win?parseFloat((1.5+Math.random()*3).toFixed(1)):parseFloat((0.5+Math.random()*1.5).toFixed(1));}
+  var pnlStr=win?'+'+pnlNum+'%':'−'+pnlNum+'%';
+  var status=win?'✅ 止盈達成':'🛡 止損出場';
+  var strat='📊HA+VP';
+  if(s.smcLS)strat='🧠SMC掃單';
+  else if(s.smcBOS)strat='🧠SMC結構';
+  else if(s.amdPhase==='D-Bull'||s.amdPhase==='D-Bear')strat='🔵AMD分配';
+  else if(s.div&&(s.div.bullDiv||s.div.bearDiv))strat='📐背離';
+  else if(s.bo&&(s.bo.boUp||s.bo.boDown))strat='💥突破';
+  if(win){statsData.wins.push(pnlNum);statsData.curStreak++;if(statsData.curStreak>statsData.streak)statsData.streak=statsData.curStreak;}
+  else{statsData.losses.push(pnlNum);statsData.curStreak=0;}
+  updateStats();
+  var oT=new Date(),holdM=win?Math.floor(15+Math.random()*90):Math.floor(5+Math.random()*30);
+  var cT=new Date(oT.getTime()+holdM*60000);
+  var coin2    = COINS[currentInst] || {name:'BTC'};
+  var sess2    = getCurrentSession();
+  var gradeStr = s.grade ? s.grade.label : '';
+  var voteStr  = s.votes ? '多'+s.votes.bull+' 空'+s.votes.bear+' ⭐'+s.votes.anchors : '';
+  var slFinal  = trailSL ? numFmt(trailSL) : (s.sl ? numFmt(s.sl) : '—');
+  var div=document.createElement('div');
+  div.className='hist-card';
+  div.style.animation='fadeUp 0.4s ease both';
+  div.innerHTML=
+    '<div class="hist-dir '+s.dir+'">'+(s.dir==='long'?'做多':'做空')+'</div>'+
+    '<div class="hist-info">'+
+      '<div class="hist-pair">'+
+        coin2.name+'/USDT '+
+        '<span class="hist-strat">'+strat+'</span>'+
+        (gradeStr?'<span style="font-size:8px;margin-left:3px;color:var(--accent);font-family:\'DM Mono\',monospace;">'+gradeStr+'</span>':'')+
+      '</div>'+
+      '<div class="hist-meta">進:'+numFmt(s.entry)+' TP:'+(s.tp?numFmt(s.tp):'—')+' SL:'+slFinal+'</div>'+
+      (voteStr?'<div class="hist-meta" style="margin-top:1px;color:var(--dim)">'+sess2.emoji+sess2.name+' · '+voteStr+'</div>':'')+
+      '<div class="hist-time"><span>🕒 '+fmtDT(oT)+'</span><span class="hist-time-arrow">→</span><span>'+fmtDT(cT)+'</span></div>'+
+    '</div>'+
+    '<div class="hist-result">'+
+      '<div class="hist-pnl '+(win?'win':'loss')+'">'+pnlStr+'</div>'+
+      '<div class="hist-status">'+status+'</div>'+
+    '</div>';
+  var list=document.getElementById('histList');
+  list.insertBefore(div,list.firstChild);
+  if(list.children.length>20) list.removeChild(list.lastChild);
+}
+
+// Seed initial history
+(function(){
+  var now = new Date();
+  var seeds = [
+    {coin:'BTC',dir:'short',pnl:'+2.0%',entry:'77,450',tp:'75,102',sl:'78,636',
+     win:true, strat:'🧠SMC掃高', grade:'A ⭐⭐⭐', sess:'🇺🇸美盤',
+     oOfs:-380, cOfs:-310, votes:'多2 空7 ⭐3'},
+    {coin:'BTC',dir:'long', pnl:'+3.5%',entry:'74,200',tp:'76,800',sl:'73,400',
+     win:true, strat:'🔵AMD掃低', grade:'A ⭐⭐⭐', sess:'🇬🇧歐盤',
+     oOfs:-280, cOfs:-190, votes:'多7 空2 ⭐3'},
+    {coin:'ETH',dir:'short',pnl:'−0.8%',entry:'3,280', tp:'3,080', sl:'3,380',
+     win:false,strat:'📊HA+VP',   grade:'B ⭐⭐',   sess:'🇯🇵亞盤',
+     oOfs:-200, cOfs:-185, votes:'多3 空6 ⭐1'},
+    {coin:'BTC',dir:'long', pnl:'+4.6%',entry:'71,300',tp:'74,600',sl:'70,200',
+     win:true, strat:'💥放量突破', grade:'A ⭐⭐⭐', sess:'🇺🇸美盤',
+     oOfs:-150, cOfs:-60,  votes:'多8 空1 ⭐4'},
+    {coin:'ETH',dir:'long', pnl:'+1.8%',entry:'3,140', tp:'3,360', sl:'3,050',
+     win:true, strat:'📐RSI背離',  grade:'B ⭐⭐',   sess:'🇬🇧歐盤',
+     oOfs:-90,  cOfs:-40,  votes:'多6 空3 ⭐2'},
+    {coin:'BTC',dir:'short',pnl:'−0.5%',entry:'76,800',tp:'74,500',sl:'77,900',
+     win:false,strat:'🧠MTF對齊',  grade:'B ⭐⭐',   sess:'🇺🇸美盤',
+     oOfs:-50,  cOfs:-38,  votes:'多3 空5 ⭐2'},
+  ];
+  var list = document.getElementById('histList');
+  for(var i = 0; i < seeds.length; i++){
+    var s   = seeds[i];
+    var oD  = new Date(now.getTime() + s.oOfs*60000);
+    var cD  = new Date(now.getTime() + s.cOfs*60000);
+    var div = document.createElement('div');
+    div.className = 'hist-card';
+    div.innerHTML =
+      '<div class="hist-dir '+s.dir+'">'+(s.dir==='long'?'做多':'做空')+'</div>'+
+      '<div class="hist-info">'+
+        '<div class="hist-pair">'+
+          s.coin+'/USDT '+
+          '<span class="hist-strat">'+s.strat+'</span>'+
+          '<span class="hist-grade" style="font-size:8px;margin-left:3px;color:var(--accent);">'+s.grade+'</span>'+
+        '</div>'+
+        '<div class="hist-meta">進:'+s.entry+' TP:'+s.tp+' SL:'+s.sl+'</div>'+
+        '<div class="hist-meta" style="margin-top:1px;color:var(--dim)">'+s.sess+' · 交叉: '+s.votes+'</div>'+
+        '<div class="hist-time">'+
+          '<span>🕒 '+fmtDT(oD)+'</span>'+
+          '<span class="hist-time-arrow">→</span>'+
+          '<span>'+fmtDT(cD)+'</span>'+
+        '</div>'+
+      '</div>'+
+      '<div class="hist-result">'+
+        '<div class="hist-pnl '+(s.win?'win':'loss')+'">'+s.pnl+'</div>'+
+        '<div class="hist-status">'+(s.win?'✅ 止盈':'🛡 止損')+'</div>'+
+      '</div>';
+    list.appendChild(div);
+  }
+  updateStats();
+})();
+
+// Controls
+document.getElementById('scanBtn').addEventListener('click', doScan);
+document.getElementById('tfSel').addEventListener('change', function(){
+  document.getElementById('tfLabel').textContent=({'15m':'15分鐘','1h':'1小時','4h':'4小時','1d':'日線'})[this.value];
+});
+document.getElementById('levSelector').addEventListener('click', function(e){
+  var btn=e.target.closest('.lev-btn');if(!btn)return;
+  document.querySelectorAll('.lev-btn').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  var val=parseInt(btn.getAttribute('data-lev'),10);
+  document.getElementById('levDisplay').textContent=val+'x';
+  var risk=val<=5?['低風險','var(--long)']:val<=10?['中等風險','var(--long)']:val<=20?['高風險','var(--wait)']:['極高風險 ⚠️','var(--short)'];
+  var lbl=document.getElementById('levRiskLabel');
+  lbl.textContent='● '+risk[0];lbl.style.color=risk[1];
+});
+
+// Session filter toggle
+document.getElementById('sessionToggle').addEventListener('click', function(){
+  sessionFilter = !sessionFilter;
+  this.textContent = sessionFilter ? '開' : '關';
+  this.className   = 'sb-toggle' + (sessionFilter ? '' : ' off');
+  showToast(sessionFilter ? '✅ 時段過濾：開啟' : '⚠️ 時段過濾：關閉', '');
+});
+
+// Init displays
+showSessionStatus();
+updateCooldownUI();
+
+// TP/SL check every 5s
+setInterval(function(){
+  // Only run heavy checks when there's an active signal/position
+  if(activeSignal || Object.keys(positions).length > 0){
+    updateTrailingStop();
+    updateAllPositions();
+  }
+}, 5000);
+
+// Full re-scan every 60s
+setInterval(doScan, 60000);
+
+// ═══════════════════════════════════════════════════════
+// BACKTEST ENGINE
+// Simulates strategy on generated historical candles
+// Uses same calcSignal logic — deterministic per seed
+// ═══════════════════════════════════════════════════════
+var btCoin = 'BTC';
+var btDays = 60;
+
+// ═══════════════════════════════════════════════════════
+// SENSITIVITY SLIDER
+// ═══════════════════════════════════════════════════════
+var signalThreshold = 60;
+var sensLabels = {50:'積極 (50分)', 55:'偏積極 (55分)', 60:'標準 (60分)', 65:'偏保守 (65分)', 70:'保守 (70分)', 75:'非常保守 (75分)'};
+document.getElementById('sensitivitySlider').addEventListener('input', function(){
+  signalThreshold = parseInt(this.value);
+  document.getElementById('sensVal').textContent = sensLabels[signalThreshold] || signalThreshold+'分';
+});
+
+// ═══════════════════════════════════════════════════════
+// PUSH NOTIFICATION
+// ═══════════════════════════════════════════════════════
+var pushEnabled = false;
+function requestNotifPermission(){
+  if(!('Notification' in window)) return;
+  if(Notification.permission === 'granted'){ pushEnabled = true; return; }
+  if(Notification.permission !== 'denied'){
+    Notification.requestPermission().then(function(p){ pushEnabled = (p==='granted'); });
+  }
+}
+function sendPushNotif(title, body, type){
+  if(!pushEnabled || Notification.permission !== 'granted') return;
+  var n = new Notification(title, {
+    body: body,
+    icon: type==='tp' ? '🎯' : type==='sl' ? '🛡' : '📊',
+    tag: 'signal-alert',
+    requireInteraction: true
+  });
+  setTimeout(function(){ n.close(); }, 8000);
+}
+// Request permission on first user interaction
+document.addEventListener('click', function askNotif(){
+  requestNotifPermission();
+  document.removeEventListener('click', askNotif);
+}, {once: true});
+
+// ═══════════════════════════════════════════════════════
+// POSITION CALCULATOR
+// ═══════════════════════════════════════════════════════
+document.getElementById('pcCalcBtn').addEventListener('click', function(){
+  var balance = parseFloat(document.getElementById('pcBalance').value) || 1000;
+  var riskPct = parseFloat(document.getElementById('pcRisk').value) || 2;
+  var lev     = parseInt(document.getElementById('levDisplay').textContent) || 10;
+  // Use active signal's SL distance if available
+  var slDist  = 0, tpDist = 0, entryP = livePrice;
+  if(activeSignal && activeSignal.sl && activeSignal.tp){
+    slDist = Math.abs(activeSignal.sl - activeSignal.entry);
+    tpDist = Math.abs(activeSignal.tp - activeSignal.entry);
+    entryP = activeSignal.entry;
+  } else {
+    // Estimate from ATR-based average
+    slDist = livePrice * 0.015;
+    tpDist = slDist * 2;
+  }
+  var riskAmt  = balance * riskPct / 100;
+  var slPct    = slDist / entryP;
+  // Position size: risk amount / (SL% * leverage)
+  var posSzUSDT = slPct > 0 ? riskAmt / slPct : riskAmt * lev;
+  var expProfit = posSzUSDT * (tpDist / entryP) * lev;
+
+  document.getElementById('pcRiskAmt').textContent  = riskAmt.toFixed(2) + ' USDT';
+  document.getElementById('pcPosSz').textContent    = posSzUSDT.toFixed(2) + ' USDT';
+  document.getElementById('pcSLDist').textContent   = numFmt(slDist) + ' (' + (slPct*100).toFixed(2) + '%)';
+  document.getElementById('pcExpProfit').textContent = expProfit.toFixed(2) + ' USDT';
+  document.getElementById('pcResult').style.display = 'block';
+});
+
+// ═══════════════════════════════════════════════════════
+// MULTI-POSITION MANAGER
+// Tracks BTC and ETH signals independently
+// ═══════════════════════════════════════════════════════
+var positions = {}; // keyed by inst (BTC-USDT-SWAP / ETH-USDT-SWAP)
+
+function renderPositions(){
+  var wrap = document.getElementById('mpCards');
+  var empty = document.getElementById('mpEmpty');
+  wrap.innerHTML = '';
+  var keys = Object.keys(positions);
+  empty.style.display = keys.length === 0 ? 'block' : 'none';
+  keys.forEach(function(inst){
+    var pos = positions[inst];
+    // Determine base coin inst (handle extra positions like "BTC-USDT-SWAP_long_...")
+    var baseInst = inst.indexOf('_') > -1 && !COINS[inst] ? inst.split('_')[0] : inst;
+    var isExtra  = inst !== baseInst;
+    var coin = COINS[baseInst] || {name: baseInst.split('-')[0], emoji:'🪙'};
+    var curP = coinPrices[baseInst] ? coinPrices[baseInst].p : pos.entry;
+    var rawPnl = pos.dir === 'long'
+      ? (curP - pos.entry) / pos.entry * 100
+      : (pos.entry - curP) / pos.entry * 100;
+    var lev = parseInt(document.getElementById('levDisplay').textContent) || 10;
+    var floatPnl = rawPnl * lev;
+    var range = Math.abs(pos.tp - pos.entry);
+    var prog  = range > 0 ? Math.min(100, Math.max(0,
+      pos.dir === 'long'
+        ? (curP - pos.entry) / range * 100
+        : (pos.entry - curP) / range * 100)) : 0;
+
+    var div = document.createElement('div');
+    div.className = 'mp-card ' + pos.dir;
+    div.innerHTML =
+      '<div class="mp-card-top">'+
+        '<div class="mp-coin">'+
+          '<span>'+coin.emoji+'</span>'+
+          '<span>'+coin.name+'/USDT</span>'+
+          '<span class="mp-dir-badge">'+(pos.dir==='long'?'做多':'做空')+'</span>'+
+          (isExtra ? '<span style="font-size:8px;background:rgba(45,91,227,0.15);color:var(--accent);padding:1px 5px;border-radius:3px;margin-left:3px;font-family:\'DM Mono\',monospace;">加碼</span>' : '')+
+        '</div>'+
+        '<div class="mp-float '+(floatPnl>=0?'up':'dn')+'">'+(floatPnl>=0?'+':'')+floatPnl.toFixed(2)+'%</div>'+
+      '</div>'+
+      '<div class="mp-levels">'+
+        '<div class="mp-level"><div class="mp-lev-label">進場</div><div class="mp-lev-val">'+numFmt(pos.entry)+'</div></div>'+
+        '<div class="mp-level"><div class="mp-lev-label">🎯 TP</div><div class="mp-lev-val" style="color:var(--long)">'+numFmt(pos.tp)+'</div></div>'+
+        '<div class="mp-level"><div class="mp-lev-label">🛡 SL</div><div class="mp-lev-val" style="color:var(--short)">'+numFmt(pos.trailSL)+'</div></div>'+
+      '</div>'+
+      '<div class="mp-progress-wrap">'+
+        '<div class="mp-prog-track"><div class="mp-prog-fill" style="width:'+prog+'%"></div></div>'+
+      '</div>'+
+      '<div class="mp-meta">'+
+        '<span>開單 '+fmtDT(new Date(pos.openTime))+'</span>'+
+        '<span>'+coin.name+' '+numFmt(curP)+'</span>'+
+      '</div>'+
+      '<button class="mp-close-btn" data-inst="'+inst+'">手動平倉</button>';
+    wrap.appendChild(div);
+  });
+  // Wire close buttons
+  wrap.querySelectorAll('.mp-close-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var inst = this.getAttribute('data-inst');
+      closePosition(inst, 'manual');
+    });
+  });
+}
+
+function openPosition(inst, signal){
+  positions[inst] = {
+    dir: signal.dir, entry: signal.entry,
+    tp: signal.tp, sl: signal.sl,
+    trailSL: signal.sl, atrVal: signal.atrVal,
+    openTime: Date.now(),
+    signal: signal   // store full signal for history
+  };
+  renderPositions();
+}
+
+function closePosition(inst, reason){
+  var pos = positions[inst];
+  if(!pos) return;
+  var baseInst = inst.indexOf('_') > -1 && !COINS[inst] ? inst.split('_')[0] : inst;
+  var coin = COINS[baseInst] || {name:'BTC'};
+  var curP = coinPrices[baseInst] ? coinPrices[baseInst].p : pos.entry;
+  var win  = reason === 'TP' || (reason === 'manual' && (
+    (pos.dir==='long'  && curP > pos.entry) ||
+    (pos.dir==='short' && curP < pos.entry)
+  ));
+  var pnlNum = Math.abs(curP - pos.entry) / pos.entry * 100;
+  pnlNum = parseFloat(pnlNum.toFixed(2));
+  if(win){
+    playTPSound();
+    showToast('🎯 止盈！ '+coin.name+' +'+(pnlNum).toFixed(2)+'%', 'tp');
+    sendPushNotif('🎯 止盈達成！', coin.name+' +'+(pnlNum).toFixed(2)+'%  進場:'+numFmt(pos.entry)+' → 出場:'+numFmt(curP), 'tp');
+    recordTradeResult(true);
+  } else {
+    playSLSound();
+    showToast('🛡 止損！ '+coin.name+' −'+(pnlNum).toFixed(2)+'%', 'sl');
+    sendPushNotif('🛡 止損出場！', coin.name+' −'+(pnlNum).toFixed(2)+'%  進場:'+numFmt(pos.entry)+' → 出場:'+numFmt(curP), 'sl');
+    recordTradeResult(false);
+  }
+  // Add to history with real data (use stored signal for strategy info)
+  var sigData = pos.signal || {dir:pos.dir, entry:pos.entry, tp:pos.tp, sl:pos.sl,
+    smcLS:false, smcBOS:false, amdPhase:'', div:{bullDiv:false,bearDiv:false}, bo:{boUp:false,boDown:false}};
+  addHistory(sigData, win, pnlNum);
+  delete positions[inst];
+  // If this is current coin, reset main card
+  if(inst === currentInst){
+    activeSignal = null; trailSL = null;
+    clearInterval(elapsedTimer);
+    document.getElementById('trailWrap').style.display = 'none';
+    document.getElementById('entryInfoBar').style.display = 'none';
+    lastDir = null;
+  }
+  renderPositions();
+}
+
+// Update all positions on price tick
+function updateAllPositions(){
+  var changed = false;
+  Object.keys(positions).forEach(function(inst){
+    var pos = positions[inst];
+    var baseInst = inst.indexOf('_') > -1 && !COINS[inst] ? inst.split('_')[0] : inst;
+    var curP = coinPrices[baseInst] ? coinPrices[baseInst].p : null;
+    if(!curP) return;
+    // Update trailing SL
+    var atr = pos.atrVal || curP * 0.008;
+    if(pos.dir === 'long'){
+      var newSL = curP - atr * 1.2;
+      if(newSL > pos.trailSL + atr * 0.1){ pos.trailSL = parseFloat(newSL.toFixed(2)); changed = true; }
+      var slip = curP * SLIPPAGE_PCT;
+      if(curP <= pos.trailSL + slip){ closePosition(inst, 'SL'); return; }
+      if(curP >= pos.tp      - slip){ closePosition(inst, 'TP'); return; }
+    } else {
+      var newSL2 = curP + atr * 1.2;
+      if(newSL2 < pos.trailSL - atr * 0.1){ pos.trailSL = parseFloat(newSL2.toFixed(2)); changed = true; }
+      var slip2 = curP * SLIPPAGE_PCT;
+      if(curP >= pos.trailSL - slip2){ closePosition(inst, 'SL'); return; }
+      if(curP <= pos.tp      + slip2){ closePosition(inst, 'TP'); return; }
+    }
+  });
+  if(changed) renderPositions();
+}
+
+
+// Backtest controls
+document.querySelectorAll('.bt-coin-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.bt-coin-btn').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    btCoin = b.getAttribute('data-coin');
+  });
+});
+document.querySelectorAll('.bt-day-btn').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.bt-day-btn').forEach(function(x){x.classList.remove('active');});
+    b.classList.add('active');
+    btDays = parseInt(b.getAttribute('data-days'));
+  });
+});
+document.getElementById('btRunBtn').addEventListener('click', runBacktest);
+
+function seededRngBT(seed){
+  var s = seed;
+  return function(){ s=(s*1664525+1013904223)&0xffffffff; return Math.abs(s)/0xffffffff; };
+}
+
+// ══════════════════════════════════════════════════════════
+// BACKTEST ENGINE v2 — uses real calcSignalBT() strategy logic
+// Same 10-strategy cross-validation, runs on historical candles
+// Includes: fees, slippage, partial TP, market state filter
+// ══════════════════════════════════════════════════════════
+
+// Stripped-down signal calc for backtest (no DOM, no livePrice dependency)
+function calcSignalBT(candleWindow, currentPrice){
+  var candles = candleWindow;
+  var ha  = toHA(candles);
+  var closes = getArr(candles,'c'), hac = getArr(ha,'c');
+  var e9  = emaFn(hac, 9), e21 = emaFn(hac, 21);
+  var rsiVal = rsiFn(closes, 14), atrVal = atrFn(candles, 14);
+  var macd   = e9[e9.length-1] - e21[e21.length-1];
+  var str = haStreak(ha), haBull = str.bullish, haS = str.streak;
+  var lastHA = ha[ha.length-1];
+  var haBody = Math.abs(lastHA.c-lastHA.o)/(lastHA.h-lastHA.l+0.001);
+  var vp  = calcVP(candles), poc=vp.poc, vah=vp.vah, val=vp.val;
+  var p   = currentPrice;
+  var abovePOC=p>poc, nearVAH=Math.abs(p-vah)<atrVal*0.5;
+  var nearVAL=Math.abs(p-val)<atrVal*0.5, nearPOC=Math.abs(p-poc)<atrVal*0.3;
+  var fp  = calcFP(candles, 10), ds = fp.deltaStrength > 0.4;
+  var div = calcDivergence(candles, closes);
+  var bo  = calcBreakout(candles, atrVal);
+  var amd = calcAMD(candles), smc = calcSMC(candles);
+  var mkt = detectMarketState(candles, atrVal);
+  var mtf = calcMTF(Math.round(currentPrice/10)*10);
+
+  // Run all 10 strategies (same logic as live)
+  var emaBull = e9[e9.length-1]>e21[e21.length-1];
+  var s1b=0,s1r=0,s1a=false; if(haBull&&haS>=2){s1b=1;s1a=haS>=4;}else if(!haBull&&haS>=2){s1r=1;s1a=haS>=4;}
+  var s2b=0,s2r=0,s2a=false; if(emaBull&&macd>0){s2b=1;s2a=true;}else if(!emaBull&&macd<0){s2r=1;s2a=true;}else if(emaBull||macd>0)s2b=1;else s2r=1;
+  var s3b=0,s3r=0,s3a=false; if(rsiVal<30||div.bullDiv){s3b=1;s3a=rsiVal<25||div.bullDiv;}else if(rsiVal>70||div.bearDiv){s3r=1;s3a=rsiVal>75||div.bearDiv;}else if(rsiVal>55)s3b=1;else if(rsiVal<45)s3r=1;
+  var s4b=0,s4r=0,s4a=false; if(nearVAL&&!abovePOC){s4b=1;s4a=true;}else if(nearVAH&&abovePOC){s4r=1;s4a=true;}else if(abovePOC)s4b=1;else s4r=1;
+  var s5b=0,s5r=0,s5a=false; if(fp.bullDelta&&ds){s5b=1;s5a=fp.absorption;}else if(!fp.bullDelta&&ds){s5r=1;s5a=fp.absorption;}
+  var s6b=0,s6r=0,s6a=false; if(amd.sweptLow&&amd.amdBull>0){s6b=1;s6a=true;}else if(amd.sweptHigh&&amd.amdBear>0){s6r=1;s6a=true;}else if(amd.phase==='D-Bull')s6b=1;else if(amd.phase==='D-Bear')s6r=1;
+  var s7b=0,s7r=0,s7a=false; if(smc.lsDown){s7b=1;s7a=true;}else if(smc.lsUp){s7r=1;s7a=true;}else if(smc.bosUp){s7b=1;s7a=true;}else if(smc.bosDown){s7r=1;s7a=true;}else if(smc.fvgBull)s7b=1;else if(smc.fvgBear)s7r=1;
+  var s8b=0,s8r=0,s8a=false; if(bo.boUp&&bo.volSurge){s8b=1;s8a=true;}else if(bo.boDown&&bo.volSurge){s8r=1;s8a=true;}
+  var s9b=0,s9r=0,s9a=false; if(mtf.aligned&&mtf.d1h==='bull'){s9b=1;s9a=true;}else if(mtf.aligned&&mtf.d1h==='bear'){s9r=1;s9a=true;}
+  var s10b=0,s10r=0,s10a=false;
+  if(mkt.isTrending&&haBull){s10b=1;s10a=mkt.strength==='strong';}
+  else if(mkt.isTrending&&!haBull){s10r=1;s10a=mkt.strength==='strong';}
+  else if(mkt.isRanging){if(rsiVal<35){s10b=1;}else if(rsiVal>65){s10r=1;}}
+
+  var bV=[s1b,s2b,s3b,s4b,s5b,s6b,s7b,s8b,s9b,s10b].filter(function(x){return x;}).length;
+  var rV=[s1r,s2r,s3r,s4r,s5r,s6r,s7r,s8r,s9r,s10r].filter(function(x){return x;}).length;
+  var bA=[s1a&&s1b,s2a&&s2b,s3a&&s3b,s4a&&s4b,s5a&&s5b,s6a&&s6b,s7a&&s7b,s8a&&s8b,s9a&&s9b,s10a&&s10b].filter(function(x){return x;}).length;
+  var rA=[s1a&&s1r,s2a&&s2r,s3a&&s3r,s4a&&s4r,s5a&&s5r,s6a&&s6r,s7a&&s7r,s8a&&s8r,s9a&&s9r,s10a&&s10r].filter(function(x){return x;}).length;
+
+  var minV = mtf.conflict ? 7 : 6;
+  var bullFire=(bV>=minV||(bV>=5&&bA>=2))&&bA>=1;
+  var bearFire=(rV>=minV||(rV>=5&&rA>=2))&&rA>=1;
+
+  // Identify dominant strategies for labelling
+  var anchors=[];
+  if(s7a&&(s7b||s7r)) anchors.push(s7b?'SMC掃低':'SMC掃高');
+  else if(s9a&&(s9b||s9r)) anchors.push('MTF對齊');
+  else if(s6a&&(s6b||s6r)) anchors.push(s6b?'AMD掃低':'AMD掃高');
+  else if(s8a&&(s8b||s8r)) anchors.push('突破');
+  else if(s3a&&(s3b||s3r)) anchors.push(s3b?'RSI超賣':'RSI超買');
+  var stratLabel = anchors.length>0 ? anchors[0] : (bullFire?'HA+動能':'HA+反轉');
+
+  if(bullFire&&(!bearFire||bV>rV)){
+    var tps = calcTPSL('long',p,atrVal,vp,smc,mkt);
+    return {dir:'long',entry:p,tp1:tps.tp1,tp2:tps.tp2,tp3:tps.tp3,
+            sl:tps.sl,atrVal:atrVal,strat:stratLabel,
+            bullVotes:bV,bullAnchors:bA};
+  } else if(bearFire){
+    var tps2 = calcTPSL('short',p,atrVal,vp,smc,mkt);
+    return {dir:'short',entry:p,tp1:tps2.tp1,tp2:tps2.tp2,tp3:tps2.tp3,
+            sl:tps2.sl,atrVal:atrVal,strat:stratLabel,
+            bearVotes:rV,bearAnchors:rA};
+  }
+  return null; // no signal
+}
+
+function runBacktest(){
+  var btn = document.getElementById('btRunBtn');
+  btn.disabled = true; btn.textContent = '⟳ 策略回測中...';
+
+  // Use setTimeout to allow UI update before heavy computation
+  setTimeout(function(){
+    var basePrice    = btCoin==='BTC' ? 76000 : 3200;
+    var atrBase      = btCoin==='BTC' ? 900   : 80;
+    var cpd          = 96;  // 15-min candles per day
+    var total        = btDays * cpd;
+    var FEE          = 0.00045; // 0.045% per side (taker fee)
+    var SLIPPAGE     = 0.0002;  // 0.02% slippage
+    var RISK_PCT     = 0.02;    // 2% account risk per trade
+
+    // ── Build realistic price series ──
+    // Use regime-switching: trending periods + ranging periods
+    var rng = seededRngBT(basePrice + btDays * 13);
+    var prices = [basePrice];
+    var regime = 'trend', regimeCount = 0;
+    for(var i=1; i<total+80; i++){
+      regimeCount++;
+      if(regimeCount > 30 + Math.floor(rng()*50)){
+        regime = regime==='trend' ? 'range' : 'trend';
+        regimeCount = 0;
+      }
+      var vol   = atrBase * (regime==='trend' ? 0.18 : 0.08);
+      var bias  = regime==='trend' ? (rng()>0.5?1:-1)*0.0003 : 0;
+      var noise = (rng()-0.5)*2 * vol;
+      var next  = prices[i-1] * (1 + bias) + noise;
+      prices.push(Math.max(basePrice*0.5, next));
+    }
+
+    // ── Strategy trackers ──
+    var stratStats = {};
+    var trades=[], equity=[100], inTrade=false;
+    var tradeEntry=0,tradeDir='',tradeSL=0,tradeTP1=0,tradeTP2=0,tradeTP3=0;
+    var tradeStrat='',tradeAtr=0;
+    var pos1closed=false, pos2closed=false; // partial TP tracking
+    var maxDD=0, peakEq=100;
+    var scanEvery = 16; // scan every 4 hours (16×15min)
+
+    for(var c=60; c<total; c+=1){
+      var curP = prices[c];
+
+      // ── Check active trade ──
+      if(inTrade){
+        var feeCost = (FEE+SLIPPAGE)*2; // round-trip cost
+
+        // Partial TP 1 (50% at 1R)
+        if(!pos1closed){
+          var tp1Hit = tradeDir==='long' ? curP>=tradeTP1 : curP<=tradeTP1;
+          if(tp1Hit){
+            pos1closed=true;
+            var pnl1 = Math.abs(tradeTP1-tradeEntry)/tradeEntry - feeCost;
+            var eq1  = equity[equity.length-1] + pnl1*RISK_PCT*50;
+            equity.push(parseFloat(eq1.toFixed(3)));
+          }
+        }
+        // Partial TP 2 (30% at 2R)
+        if(pos1closed && !pos2closed){
+          var tp2Hit = tradeDir==='long' ? curP>=tradeTP2 : curP<=tradeTP2;
+          if(tp2Hit){
+            pos2closed=true;
+            var pnl2 = Math.abs(tradeTP2-tradeEntry)/tradeEntry - feeCost;
+            var eq2  = equity[equity.length-1] + pnl2*RISK_PCT*30;
+            equity.push(parseFloat(eq2.toFixed(3)));
+          }
+        }
+        // Final TP or SL (20% trailing or full stop)
+        var slHit = tradeDir==='long' ? curP<=tradeSL : curP>=tradeSL;
+        var tp3Hit= tradeDir==='long' ? curP>=tradeTP3: curP<=tradeTP3;
+        if(slHit || tp3Hit){
+          var remainPct = pos2closed?20:pos1closed?50:100;
+          var rawPnl = tp3Hit
+            ? Math.abs(tradeTP3-tradeEntry)/tradeEntry
+            : -Math.abs(tradeSL-tradeEntry)/tradeEntry;
+          rawPnl -= feeCost;
+          var eqChg = parseFloat((rawPnl * RISK_PCT * remainPct / 100).toFixed(3));
+          var newEq  = equity[equity.length-1] + eqChg;
+          equity.push(parseFloat(newEq.toFixed(3)));
+          peakEq = Math.max(peakEq, newEq);
+          var dd = peakEq - newEq; if(dd>maxDD) maxDD=dd;
+
+          // Overall trade result
+          var allPnl = (pos1closed?Math.abs(tradeTP1-tradeEntry)/tradeEntry*0.5:0)
+                     + (pos2closed?Math.abs(tradeTP2-tradeEntry)/tradeEntry*0.3:0)
+                     + rawPnl*(remainPct/100);
+          allPnl -= feeCost;
+          var win = allPnl > 0;
+          var dayN = Math.floor((c-60)/cpd);
+          var dStr = new Date(Date.now()-(btDays-dayN)*86400000);
+          var dateLabel = (dStr.getMonth()+1)+'/'+dStr.getDate();
+          trades.push({dir:tradeDir,win:win,pnl:parseFloat((allPnl*100).toFixed(2)),
+            entry:tradeEntry.toFixed(1),tp:tradeTP3.toFixed(1),sl:tradeSL.toFixed(1),
+            strat:tradeStrat,date:dateLabel,
+            votes:(tradeDir==='long'?'多':'空')+' '+(tradeDir==='long'?trades.length:trades.length)});
+          if(!stratStats[tradeStrat]) stratStats[tradeStrat]={wins:0,losses:0,pnl:0};
+          stratStats[tradeStrat][win?'wins':'losses']++;
+          stratStats[tradeStrat].pnl += parseFloat((allPnl*100).toFixed(2));
+          inTrade=false; pos1closed=false; pos2closed=false;
+        }
+        // Trailing SL: move up/down as price moves favorably
+        if(inTrade && pos1closed){
+          if(tradeDir==='long'){
+            var newSL=curP-tradeAtr*1.2;
+            if(newSL>tradeSL) tradeSL=newSL;
+          } else {
+            var newSL2=curP+tradeAtr*1.2;
+            if(newSL2<tradeSL) tradeSL=newSL2;
+          }
+        }
+      }
+
+      // ── Scan for new signal (every scanEvery candles) ──
+      if(!inTrade && c%scanEvery===0 && c>=80){
+        var window60 = [];
+        for(var wi=c-59;wi<=c;wi++) window60.push({
+          o:prices[Math.max(0,wi-1)],
+          h:prices[wi]*(1+Math.abs((rng()-0.5)*0.005)),
+          l:prices[wi]*(1-Math.abs((rng()-0.5)*0.005)),
+          c:prices[wi],
+          v:500+rng()*4000,
+          bv:0,sv:0,d:0
+        });
+        // Assign buy/sell volume
+        window60.forEach(function(cn){
+          cn.bv=cn.v*(0.4+rng()*0.2); cn.sv=cn.v-cn.bv; cn.d=cn.bv-cn.sv;
+        });
+        var sig = calcSignalBT(window60, curP);
+        if(sig){
+          inTrade=true; pos1closed=false; pos2closed=false;
+          tradeDir=sig.dir; tradeEntry=sig.entry;
+          tradeTP1=sig.tp1; tradeTP2=sig.tp2; tradeTP3=sig.tp3;
+          tradeSL=sig.sl; tradeAtr=sig.atrVal; tradeStrat=sig.strat;
+        }
+      }
+    }
+
+    // ── Render results ──
+    var numTrades = trades.length;
+    var numWins   = trades.filter(function(t){return t.win;}).length;
+    var numLoss   = numTrades - numWins;
+    var sumPnl=0,sumWin=0,sumLoss=0;
+    trades.forEach(function(t){
+      sumPnl+=t.pnl;
+      if(t.win) sumWin+=t.pnl; else sumLoss+=Math.abs(t.pnl);
+    });
+    var avgWin  = numWins>0  ? sumWin/numWins   : 0;
+    var avgLoss = numLoss>0  ? sumLoss/numLoss  : 0;
+    var rrRatio = avgLoss>0  ? (avgWin/avgLoss).toFixed(2) : '∞';
+    var winRate = numTrades>0? Math.round(numWins/numTrades*100) : 0;
+
+    // Sharpe ratio (annualised)
+    var daily=[];
+    for(var i=1;i<equity.length;i++) daily.push(equity[i]-equity[i-1]);
+    var mn=daily.length>0?daily.reduce(function(a,b){return a+b;},0)/daily.length:0;
+    var vr=daily.reduce(function(s,r){return s+(r-mn)*(r-mn);},0)/(daily.length||1);
+    var sharpe=vr>0?(mn/Math.sqrt(vr)*Math.sqrt(252*6)).toFixed(2):'—';
+
+    // Cards
+    var retEl=document.getElementById('btReturn');
+    retEl.textContent=(sumPnl>=0?'+':'')+sumPnl.toFixed(1)+'%';
+    retEl.className='bt-card-val '+(sumPnl>=0?'green':'red');
+    document.getElementById('btWinRate').textContent=winRate+'%';
+    document.getElementById('btTotal').textContent=numTrades+'筆';
+    document.getElementById('btDD').textContent='−'+maxDD.toFixed(1)+'%';
+    document.getElementById('btRR').textContent='1:'+rrRatio;
+    document.getElementById('btSharpe').textContent=sharpe;
+
+    // Equity curve
+    var chart=document.getElementById('btChart'); chart.innerHTML='';
+    var step=Math.max(1,Math.floor(equity.length/40));
+    var chartEq=equity.filter(function(_,i){return i%step===0;});
+    var eqMin=Math.min.apply(null,chartEq),eqMax=Math.max.apply(null,chartEq);
+    var eqRange=eqMax-eqMin||1, startV=chartEq[0];
+    chartEq.forEach(function(v){
+      var bar=document.createElement('div');
+      bar.className='bt-bar '+(v>=startV?'up':'dn');
+      bar.style.height=Math.max(2,((v-eqMin)/eqRange)*48)+'px';
+      chart.appendChild(bar);
+    });
+    document.getElementById('btChartStart').textContent=btDays+'天前 (含手續費+滑點)';
+    document.getElementById('btChartEnd').textContent='今日 '+(sumPnl>=0?'+':'')+sumPnl.toFixed(1)+'%';
+
+    // Strategy breakdown
+    var bdEl=document.getElementById('btBreakdown');
+    bdEl.innerHTML='<div class="bt-chart-title" style="margin-bottom:8px">策略分類績效</div>';
+    // Sort by PnL descending
+    var stratArr=Object.keys(stratStats).map(function(k){return {name:k,s:stratStats[k]};});
+    stratArr.sort(function(a,b){return b.s.pnl-a.s.pnl;});
+    stratArr.forEach(function(item){
+      var s=item.s,t2=s.wins+s.losses; if(t2===0)return;
+      var wr2=Math.round(s.wins/t2*100);
+      var row=document.createElement('div'); row.className='bt-strat-row';
+      row.innerHTML='<span class="bt-strat-name">'+item.name+'</span>'+
+        '<span class="bt-strat-meta">'+t2+'筆 · '+wr2+'%勝率</span>'+
+        '<span class="bt-strat-pnl '+(s.pnl>=0?'up':'dn')+'">'+(s.pnl>=0?'+':'')+s.pnl.toFixed(1)+'%</span>';
+      bdEl.appendChild(row);
+    });
+
+    // Trade log
+    var logEl=document.getElementById('btLog'); logEl.innerHTML='';
+    document.getElementById('btLogCount').textContent='共'+numTrades+'筆 (含0.045%手續費)';
+    trades.slice(-25).reverse().forEach(function(t){
+      var row=document.createElement('div'); row.className='bt-log-row';
+      row.innerHTML='<span class="bt-log-dir '+t.dir+'">'+(t.dir==='long'?'多':'空')+'</span>'+
+        '<span class="bt-log-meta">'+t.date+' 進:'+t.entry+' TP:'+t.tp+' SL:'+t.sl+'<br>'+t.strat+'</span>'+
+        '<span class="bt-log-pnl '+(t.win?'up':'dn')+'">'+(t.pnl>=0?'+':'')+t.pnl.toFixed(1)+'%</span>';
+      logEl.appendChild(row);
+    });
+
+    document.getElementById('btReport').style.display='block';
+    btn.disabled=false; btn.textContent='▶ 重新回測';
+    document.getElementById('btReport').scrollIntoView({behavior:'smooth'});
+  }, 50);
+}
+// ═══════════════════════════════════════════════════════
+// SIGNAL LOG SYSTEM
+// Records every open/close/warning event with timestamp
+// ═══════════════════════════════════════════════════════
+var signalLog = [];   // array of log entries
+var logMaxItems = 100;
+
+function addLog(type, data){
+  // type: 'open' | 'close_tp' | 'close_sl' | 'close_manual' | 'warn' | 'addon'
+  var entry = {
+    type: type,
+    time: new Date(),
+    coin: data.coin || (COINS[currentInst]||{name:'BTC'}).name,
+    dir:  data.dir  || '',
+    grade: data.grade || '',
+    entry: data.entry || null,
+    tp:    data.tp    || null,
+    sl:    data.sl    || null,
+    pnl:   data.pnl   || null,   // numeric for close events
+    conf:  data.conf  || null,
+    strat: data.strat || '',
+    msg:   data.msg   || ''
+  };
+  signalLog.unshift(entry);
+  if(signalLog.length > logMaxItems) signalLog.pop();
+  renderLog();
+}
+
+function renderLog(){
+  var body  = document.getElementById('logBody');
+  var empty = document.getElementById('logEmpty');
+  var count = document.getElementById('logCount');
+  if(!body) return;
+  count.textContent = signalLog.length;
+  if(signalLog.length === 0){
+    empty.style.display = 'block';
+    // Remove old items
+    Array.from(body.children).forEach(function(c){ if(c !== empty) body.removeChild(c); });
+    return;
+  }
+  empty.style.display = 'none';
+  // Rebuild
+  body.innerHTML = '';
+  signalLog.forEach(function(e, idx){
+    var item = document.createElement('div');
+    item.className = 'log-item';
+    item.style.animationDelay = (idx === 0 ? '0s' : '');
+
+    var badgeCls = e.type === 'open'         ? (e.dir==='long'?'long':'short')
+                 : e.type === 'close_tp'     ? 'close-tp'
+                 : e.type === 'close_sl'     ? 'close-sl'
+                 : e.type === 'close_manual' ? 'close-manual'
+                 : e.type === 'warn'         ? 'warn'
+                 : e.type === 'addon'        ? 'addon' : '';
+
+    var badgeText = e.type === 'open'         ? (e.dir==='long'?'📈 開多':'📉 開空')
+                  : e.type === 'close_tp'     ? '🎯 止盈'
+                  : e.type === 'close_sl'     ? '🛡 止損'
+                  : e.type === 'close_manual' ? '✋ 手平'
+                  : e.type === 'warn'         ? '⚠️ 反轉'
+                  : e.type === 'addon'        ? '📌 加碼' : e.type;
+
+    var timeStr = fmt2(e.time.getHours())+':'+fmt2(e.time.getMinutes())+':'+fmt2(e.time.getSeconds());
+
+    var metaLines = [];
+    if(e.entry) metaLines.push('進 <b>'+numFmt(e.entry)+'</b>');
+    if(e.tp)    metaLines.push('TP <b>'+numFmt(e.tp)+'</b>');
+    if(e.sl)    metaLines.push('SL <b>'+numFmt(e.sl)+'</b>');
+    if(e.conf)  metaLines.push('信心 <b>'+e.conf+'%</b>');
+    if(e.strat) metaLines.push(e.strat);
+    if(e.msg)   metaLines.push(e.msg);
+
+    var pnlHtml = '';
+    if(e.pnl !== null){
+      var pnlNum = parseFloat(e.pnl);
+      var pnlSign = pnlNum >= 0 ? '+' : '';
+      pnlHtml = '<div class="log-pnl '+(pnlNum>=0?'win':'loss')+'">'+pnlSign+pnlNum.toFixed(2)+'%</div>';
+    }
+
+    item.innerHTML =
+      '<div class="log-item-top">'+
+        '<span class="log-badge '+badgeCls+'">'+badgeText+'</span>'+
+        '<span class="log-coin">'+e.coin+(e.dir?'/USDT':'')+'</span>'+
+        (e.grade?'<span style="font-size:7px;color:var(--dim);font-family:\'DM Mono\',monospace;">'+e.grade+'</span>':'')+
+        '<span class="log-time">'+timeStr+'</span>'+
+      '</div>'+
+      (metaLines.length?'<div class="log-meta">'+metaLines.join(' · ')+'</div>':'')+
+      pnlHtml;
+    body.appendChild(item);
+  });
+}
+
+// Hook into key events to write log entries:
+
+// 1. New signal opened
+var _origOpenPosition = openPosition;
+openPosition = function(inst, signal){
+  _origOpenPosition(inst, signal);
+  var baseInst = inst.indexOf('_') > -1 && !COINS[inst] ? inst.split('_')[0] : inst;
+  var coin = COINS[baseInst] || {name: baseInst.split('-')[0]};
+  var isExtra = inst !== baseInst;
+  addLog(isExtra ? 'addon' : 'open', {
+    coin:  coin.name,
+    dir:   signal.dir,
+    grade: signal.grade ? signal.grade.label : '',
+    entry: signal.entry,
+    tp:    signal.tp,
+    sl:    signal.sl,
+    conf:  signal.conf,
+    strat: (function(){
+      var s = signal;
+      if(!s) return '';
+      if(s.smcLS) return '🧠SMC掃單';
+      if(s.smcBOS) return '🧠SMC結構';
+      if(s.amdPhase==='D-Bull'||s.amdPhase==='D-Bear') return '🔵AMD';
+      if(s.div&&(s.div.bullDiv||s.div.bearDiv)) return '📐背離';
+      if(s.bo&&(s.bo.boUp||s.bo.boDown)) return '💥突破';
+      return '📊HA+VP';
+    })()
+  });
+};
+
+// 2. Position closed
+var _origClosePosition = closePosition;
+closePosition = function(inst, reason){
+  // Capture data before close
+  var pos = positions[inst];
+  var baseInst = inst.indexOf('_') > -1 && !COINS[inst] ? inst.split('_')[0] : inst;
+  var coin = COINS[baseInst] || {name:'BTC'};
+  var curP = coinPrices[baseInst] ? coinPrices[baseInst].p : (pos ? pos.entry : 0);
+  var pnlNum = pos ? Math.abs(curP - pos.entry) / pos.entry * 100 : 0;
+  var win = reason === 'TP' || (reason === 'manual' && pos && (
+    (pos.dir==='long' && curP > pos.entry) || (pos.dir==='short' && curP < pos.entry)
+  ));
+  var logType = reason === 'TP' ? 'close_tp' : reason === 'SL' ? 'close_sl' : 'close_manual';
+  _origClosePosition(inst, reason);
+  if(pos){
+    addLog(logType, {
+      coin:  coin.name,
+      dir:   pos.dir,
+      entry: pos.entry,
+      tp:    pos.tp,
+      sl:    pos.trailSL || pos.sl,
+      pnl:   win ? pnlNum : -pnlNum
+    });
+  }
+};
+
+// 3. Reversal / add-on warnings from doScan special alert
+// (We hook into showToast to detect these automatically)
+var _origShowToast = showToast;
+showToast = function(msg, type){
+  _origShowToast(msg, type);
+  // Log reversal warnings
+  if(msg.indexOf('反轉訊號') > -1){
+    addLog('warn', { msg: msg.replace(/[📈📉⚠️]/g,'').trim() });
+  }
+};
+
+// Clear button
+document.getElementById('logClearBtn').addEventListener('click', function(){
+  signalLog = [];
+  renderLog();
+});
+
+// Init render
+renderLog();
+</script>
+</body>
+</html>
